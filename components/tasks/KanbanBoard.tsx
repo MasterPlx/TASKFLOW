@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRight, ArrowLeft, Plus } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import type { Status, Task } from '@/lib/types';
 import { PriorityBadge, RecurrenceBadge } from '@/components/Badges';
 import { STATUS_LABEL, cn, formatDate, isOverdue, PRIORITY_ORDER } from '@/lib/utils';
@@ -18,10 +18,12 @@ export function KanbanBoard({
   tasks,
   onSelect,
   onChangeStatus,
+  onDelete,
 }: {
   tasks: Task[];
   onSelect: (t: Task) => void;
   onChangeStatus: (t: Task, newStatus: Status) => void;
+  onDelete?: (t: Task) => void;
 }) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<Status | null>(null);
@@ -127,6 +129,19 @@ export function KanbanBoard({
                             className="btn-icon h-6 w-6"
                           >
                             <ArrowRight className="h-3 w-3" />
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDelete(t);
+                            }}
+                            aria-label="Excluir tarefa"
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-ink-faint hover:bg-accent-rose-50 hover:text-accent-rose-700"
+                          >
+                            <Trash2 className="h-3 w-3" />
                           </button>
                         )}
                       </div>

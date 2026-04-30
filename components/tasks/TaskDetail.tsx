@@ -26,6 +26,7 @@ import {
 import type { Attachment, Comment, Task } from '@/lib/types';
 import { PriorityBadge, RecurrenceBadge, StatusBadge } from '@/components/Badges';
 import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { formatDate, formatRelative, isOverdue, initials, cn } from '@/lib/utils';
 
 export function TaskDetail({
@@ -48,6 +49,7 @@ export function TaskDetail({
   brandColor?: string;
 }) {
   const { toast } = useToast();
+  const { confirm } = useConfirm();
   const [comments, setComments] = useState<Comment[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -106,13 +108,21 @@ export function TaskDetail({
     }
   }
 
-  async function handleDeleteComment(id: string) {
-    try {
-      await deleteComment(id);
-      setComments((prev) => prev.filter((c) => c.id !== id));
-    } catch {
-      toast('Erro ao excluir comentário', 'error');
-    }
+  function handleDeleteComment(id: string) {
+    confirm({
+      title: 'Excluir comentário?',
+      message: 'O comentário será removido permanentemente.',
+      confirmLabel: 'Excluir',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteComment(id);
+          setComments((prev) => prev.filter((c) => c.id !== id));
+        } catch {
+          toast('Erro ao excluir comentário', 'error');
+        }
+      },
+    });
   }
 
   async function handleAddUrlAttachment() {
@@ -157,26 +167,51 @@ export function TaskDetail({
     }
   }
 
-  async function handleDeleteAttachment(id: string) {
-    try {
-      await deleteAttachment(id);
-      setAttachments((prev) => prev.filter((a) => a.id !== id));
-    } catch {
-      toast('Erro ao remover anexo', 'error');
-    }
+  function handleDeleteAttachment(id: string, fileName: string) {
+    confirm({
+      title: 'Remover anexo?',
+      message: (
+        <span>
+          O anexo <span className="font-medium text-ink">"{fileName}"</span> será
+          removido. O arquivo no Storage não é apagado automaticamente.
+        </span>
+      ),
+      confirmLabel: 'Remover',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteAttachment(id);
+          setAttachments((prev) => prev.filter((a) => a.id !== id));
+        } catch {
+          toast('Erro ao remover anexo', 'error');
+        }
+      },
+    });
   }
 
-  async function handleDeleteTask() {
+  function handleDeleteTask() {
     if (!task || !onDeleted) return;
-    if (!window.confirm(`Excluir a tarefa "${task.title}"?`)) return;
-    try {
-      await deleteTask(task.id);
-      onDeleted(task.id);
-      toast('Tarefa excluída', 'success');
-      onClose();
-    } catch {
-      toast('Erro ao excluir tarefa', 'error');
-    }
+    confirm({
+      title: 'Excluir tarefa?',
+      message: (
+        <span>
+          A tarefa <span className="font-medium text-ink">"{task.title}"</span> será
+          removida permanentemente, junto com todos os comentários e anexos.
+        </span>
+      ),
+      confirmLabel: 'Excluir',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteTask(task.id);
+          onDeleted(task.id);
+          toast('Tarefa excluída', 'success');
+          onClose();
+        } catch {
+          toast('Erro ao excluir tarefa', 'error');
+        }
+      },
+    });
   }
 
   const overdue = isOverdue(task.due_date, task.status);
@@ -259,7 +294,7 @@ export function TaskDetail({
                     </a>
                     <button
                       type="button"
-                      onClick={() => handleDeleteAttachment(a.id)}
+                      onClick={() => handleDeleteAttachment(a.id, a.file_name)}
                       className="ml-2 hidden rounded p-1 text-ink-faint hover:bg-accent-rose-50 hover:text-accent-rose-700 group-hover:block"
                       aria-label="Remover anexo"
                     >

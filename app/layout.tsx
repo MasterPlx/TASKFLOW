@@ -3,6 +3,7 @@ import Script from 'next/script';
 import './globals.css';
 import { ToastProvider } from '@/components/Toast';
 import { ConfettiHost } from '@/components/Confetti';
+import { ConfirmProvider } from '@/components/ConfirmDialog';
 import { ThemeProvider } from '@/lib/theme';
 
 export const metadata: Metadata = {
@@ -26,7 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ThemeProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <ConfirmProvider>{children}</ConfirmProvider>
+          </ToastProvider>
           <ConfettiHost />
         </ThemeProvider>
       </body>

@@ -25,6 +25,7 @@ import {
 } from '@/lib/notes';
 import type { Note, NoteGroup } from '@/lib/types';
 import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { Skeleton } from '@/components/Skeleton';
 import { cn, formatRelative } from '@/lib/utils';
 import { GroupModal } from './GroupModal';
@@ -34,6 +35,7 @@ const NO_GROUP_ID = '__none__';
 
 export function NotesView() {
   const { toast } = useToast();
+  const { confirm } = useConfirm();
   const [groups, setGroups] = useState<NoteGroup[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>(ALL_GROUP_ID);
@@ -125,15 +127,32 @@ export function NotesView() {
     }
   }
 
-  async function handleDeleteNote(id: string) {
-    if (!window.confirm('Excluir esta nota?')) return;
-    try {
-      await deleteNote(id);
-      setNotes((prev) => prev.filter((n) => n.id !== id));
-      if (selectedNoteId === id) setSelectedNoteId(null);
-    } catch {
-      toast('Erro ao excluir nota', 'error');
-    }
+  function handleDeleteNote(id: string) {
+    const note = notes.find((n) => n.id === id);
+    confirm({
+      title: 'Excluir nota?',
+      message: (
+        <span>
+          A nota{' '}
+          <span className="font-medium text-ink">
+            "{note?.title || 'sem título'}"
+          </span>{' '}
+          será removida permanentemente.
+        </span>
+      ),
+      confirmLabel: 'Excluir',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteNote(id);
+          setNotes((prev) => prev.filter((n) => n.id !== id));
+          if (selectedNoteId === id) setSelectedNoteId(null);
+          toast('Nota excluída', 'success');
+        } catch {
+          toast('Erro ao excluir nota', 'error');
+        }
+      },
+    });
   }
 
   async function handleTogglePin(note: Note) {
@@ -161,18 +180,43 @@ export function NotesView() {
     setMoveOpen(false);
   }
 
-  async function handleDeleteGroup(g: NoteGroup) {
-    if (!window.confirm(`Excluir grupo "${g.name}"? Todas as notas dentro serão removidas.`))
-      return;
-    try {
-      await deleteNoteGroup(g.id);
-      setGroups((prev) => prev.filter((x) => x.id !== g.id));
-      setNotes((prev) => prev.filter((n) => n.group_id !== g.id));
-      if (selectedGroup === g.id) setSelectedGroup(ALL_GROUP_ID);
-      toast('Grupo excluído', 'success');
-    } catch {
-      toast('Erro ao excluir grupo', 'error');
-    }
+  function handleDeleteGroup(g: NoteGroup) {
+    const insideCount = notes.filter((n) => n.group_id === g.id).length;
+    confirm({
+      title: 'Excluir grupo?',
+      message: (
+        <span>
+          O grupo{' '}
+          <span className="font-medium text-ink">
+            {g.icon} {g.name}
+          </span>{' '}
+          será removido permanentemente
+          {insideCount > 0 && (
+            <>
+              , junto com{' '}
+              <span className="font-medium text-ink">
+                {insideCount} {insideCount === 1 ? 'nota' : 'notas'}
+              </span>{' '}
+              dentro dele
+            </>
+          )}
+          .
+        </span>
+      ),
+      confirmLabel: 'Excluir grupo',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteNoteGroup(g.id);
+          setGroups((prev) => prev.filter((x) => x.id !== g.id));
+          setNotes((prev) => prev.filter((n) => n.group_id !== g.id));
+          if (selectedGroup === g.id) setSelectedGroup(ALL_GROUP_ID);
+          toast('Grupo excluído', 'success');
+        } catch {
+          toast('Erro ao excluir grupo', 'error');
+        }
+      },
+    });
   }
 
   return (

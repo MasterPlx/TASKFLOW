@@ -1,6 +1,6 @@
 'use client';
 
-import { MessageSquare, Paperclip, ListChecks, Bell } from 'lucide-react';
+import { MessageSquare, Paperclip, ListChecks, Bell, Trash2 } from 'lucide-react';
 import type { Task } from '@/lib/types';
 import { PriorityBadge, RecurrenceBadge, StatusBadge } from '@/components/Badges';
 import { AnimatedCheckbox } from '@/components/AnimatedCheckbox';
@@ -10,12 +10,15 @@ export function TaskList({
   tasks,
   onSelect,
   onToggleComplete,
+  onDelete,
   brandColor,
   meta,
 }: {
   tasks: Task[];
   onSelect: (t: Task) => void;
   onToggleComplete: (t: Task) => void;
+  /** When provided, a hover-revealed trash button appears on each row */
+  onDelete?: (t: Task) => void;
   brandColor?: string;
   meta?: Record<string, { comments: number; attachments: number }>;
 }) {
@@ -109,6 +112,20 @@ export function TaskList({
                 )}
               </span>
             </button>
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(t);
+                }}
+                className="invisible flex-none rounded-md p-1.5 text-ink-faint transition-colors hover:bg-accent-rose-50 hover:text-accent-rose-700 group-hover:visible"
+                aria-label="Excluir tarefa"
+                title="Excluir tarefa"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </li>
         );
       })}

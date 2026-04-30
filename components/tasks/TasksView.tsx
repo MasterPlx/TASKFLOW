@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Search, List, Columns3, ArrowUpDown, Filter, X } from 'lucide-react';
-import { listAttachments, listComments, listTasks, updateTask } from '@/lib/supabase';
+import { deleteTask, listAttachments, listComments, listTasks, updateTask } from '@/lib/supabase';
 import type { Priority, Status, Task } from '@/lib/types';
 import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { TaskList } from './TaskList';
 import { KanbanBoard } from './KanbanBoard';
 import { TaskModal } from './TaskModal';
@@ -53,6 +54,7 @@ export function TasksView({
   onTaskCompleted?: (t: Task) => Promise<void> | void;
 }) {
   const { toast } = useToast();
+  const { confirm } = useConfirm();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'list' | 'kanban'>('list');
@@ -176,6 +178,31 @@ export function TasksView({
   async function toggleComplete(t: Task) {
     const newStatus: Status = t.status === 'concluída' ? 'pendente' : 'concluída';
     await changeStatus(t, newStatus);
+  }
+
+  function requestDelete(t: Task) {
+    confirm({
+      title: 'Excluir tarefa?',
+      message: (
+        <span>
+          Esta ação não pode ser desfeita. A tarefa{' '}
+          <span className="font-medium text-ink">"{t.title}"</span> será removida
+          junto com todos os comentários e anexos vinculados.
+        </span>
+      ),
+      confirmLabel: 'Excluir',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteTask(t.id);
+          setTasks((prev) => prev.filter((x) => x.id !== t.id));
+          if (selected?.id === t.id) setSelected(null);
+          toast('Tarefa excluída', 'success');
+        } catch {
+          toast('Erro ao excluir', 'error');
+        }
+      },
+    });
   }
 
   const accent = brandColor ?? '#7C3AED';
@@ -318,9 +345,15 @@ export function TasksView({
           brandColor={accent}
           onSelect={setSelected}
           onToggleComplete={toggleComplete}
+          onDelete={readOnly ? undefined : requestDelete}
         />
       ) : (
-        <KanbanBoard tasks={filtered} onSelect={setSelected} onChangeStatus={changeStatus} />
+        <KanbanBoard
+          tasks={filtered}
+          onSelect={setSelected}
+          onChangeStatus={changeStatus}
+          onDelete={readOnly ? undefined : requestDelete}
+        />
       )}
 
       <TaskModal

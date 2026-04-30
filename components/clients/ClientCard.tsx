@@ -6,6 +6,7 @@ import { useState } from 'react';
 import type { Client, Task } from '@/lib/types';
 import { initials } from '@/lib/utils';
 import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/ConfirmDialog';
 
 export function ClientCard({
   client,
@@ -25,6 +26,7 @@ export function ClientCard({
   onSendReminder: (client: Client, pending: Task[]) => Promise<void> | void;
 }) {
   const { toast } = useToast();
+  const { confirm } = useConfirm();
   const [busy, setBusy] = useState<'reminder' | 'delete' | null>(null);
 
   async function copyLink() {
@@ -57,18 +59,36 @@ export function ClientCard({
     }
   }
 
-  async function handleDelete() {
-    if (!window.confirm(`Excluir cliente "${client.name}"? Todas as tarefas serão removidas.`))
-      return;
-    setBusy('delete');
-    try {
-      await onDelete(client.id);
-      toast('Cliente excluído', 'success');
-    } catch {
-      toast('Erro ao excluir', 'error');
-    } finally {
-      setBusy(null);
-    }
+  function handleDelete() {
+    const displayName = client.brand_name ?? client.name;
+    confirm({
+      title: 'Excluir cliente?',
+      message: (
+        <span>
+          O cliente <span className="font-medium text-ink">"{displayName}"</span>{' '}
+          será removido permanentemente, junto com{' '}
+          <span className="font-medium text-ink">
+            {totalCount} {totalCount === 1 ? 'tarefa' : 'tarefas'}
+          </span>{' '}
+          (incluindo comentários e anexos). O link público{' '}
+          <span className="font-medium text-ink">/c/{client.slug}</span> também
+          deixará de funcionar.
+        </span>
+      ),
+      confirmLabel: 'Excluir cliente',
+      tone: 'danger',
+      onConfirm: async () => {
+        setBusy('delete');
+        try {
+          await onDelete(client.id);
+          toast('Cliente excluído', 'success');
+        } catch {
+          toast('Erro ao excluir', 'error');
+        } finally {
+          setBusy(null);
+        }
+      },
+    });
   }
 
   const accent = client.brand_color ?? '#7C3AED';
