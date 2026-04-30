@@ -1,19 +1,13 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# TaskFlow — VPS first-time setup script
+# TaskFlow — VPS first-time setup script (NON-INVASIVE)
 # Tested on Ubuntu 22.04 / 24.04 LTS
 #
-# Run AS ROOT on the VPS:
-#   ./scripts/setup-vps.sh
-#
-# What it does:
-#   1. Installs Docker, Docker Compose plugin, Nginx, Certbot, Git
-#   2. Asks for env values (Supabase URL/key, admin password, domain)
-#   3. Generates CRON_SECRET automatically
-#   4. Writes /opt/taskflow/.env
-#   5. Builds and starts the Docker container
-#   6. Configures Nginx (HTTP only — SSL is a follow-up step with certbot)
-#   7. Adds a cron job that fires reminders every minute
+# This script is designed to coexist with other apps on the same VPS:
+#   - Picks an unused host port (default 3030)
+#   - ONLY adds a new nginx server block (does not touch existing sites)
+#   - Does NOT enable/configure UFW (informs which ports to open if needed)
+#   - Skips Docker install if already present
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -29,14 +23,40 @@ step() { echo -e "${CYAN}▶ $1${NC}"; }
 ok()   { echo -e "${GREEN}✓ $1${NC}"; }
 warn() { echo -e "${YELLOW}! $1${NC}"; }
 err()  { echo -e "${RED}✗ $1${NC}" >&2; }
+ask()  { local prompt="$1"; local default="${2:-}"; local var; if [[ -n "$default" ]]; then read -rp "$prompt [$default]: " var; var="${var:-$default}"; else read -rp "$prompt: " var; fi; echo "$var"; }
 
-# ── 1. System packages ──────────────────────────────────────────────────────
-step "Atualizando pacotes do sistema..."
+# ── Helpers ─────────────────────────────────────────────────────────────────
+
+port_in_use() {
+  local port="$1"
+  ss -tln 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}\$"
+}
+
+pick_free_port() {
+  for p in 3030 3031 3040 3050 3100; do
+    if ! port_in_use "$p"; then
+      echo "$p"
+      return 0
+    fi
+  done
+  echo "3030"
+}
+
+# ── 1. Required packages ────────────────────────────────────────────────────
+step "Verificando pacotes..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq curl ca-certificates gnupg lsb-release ufw nginx certbot python3-certbot-nginx git openssl >/dev/null
+NEED_INSTALL=()
+for pkg in curl ca-certificates gnupg lsb-release git openssl nginx certbot python3-certbot-nginx iproute2; do
+  dpkg -s "$pkg" >/dev/null 2>&1 || NEED_INSTALL+=("$pkg")
+done
+if [[ ${#NEED_INSTALL[@]} -gt 0 ]]; then
+  step "Instalando: ${NEED_INSTALL[*]}"
+  apt-get install -y -qq "${NEED_INSTALL[@]}" >/dev/null
+fi
+ok "Pacotes prontos"
 
-# ── 2. Docker (official repo) ───────────────────────────────────────────────
+# ── 2. Docker (only if missing) ─────────────────────────────────────────────
 if ! command -v docker >/dev/null 2>&1; then
   step "Instalando Docker..."
   install -m 0755 -d /etc/apt/keyrings
@@ -52,29 +72,43 @@ else
   ok "Docker já instalado: $(docker --version)"
 fi
 
-# ── 3. Repo clone ──────────────────────────────────────────────────────────
+if ! docker compose version >/dev/null 2>&1; then
+  warn "Docker Compose plugin não detectado. Instalando..."
+  apt-get install -y -qq docker-compose-plugin >/dev/null
+fi
+
+# ── 3. Repository ──────────────────────────────────────────────────────────
 if [[ ! -d "$APP_DIR" ]]; then
   step "Clonando repositório em $APP_DIR..."
+  REPO_URL=$(ask "URL do repositório git" "https://github.com/MasterPlx/TASKFLOW.git")
   mkdir -p /opt
-  read -rp "URL do repositório git (ex: https://github.com/USUARIO/REPO.git): " REPO_URL
-  if [[ "$REPO_URL" =~ ^https://github.com/.+\.git$ ]]; then
-    git clone "$REPO_URL" "$APP_DIR"
-  else
-    err "URL inválida"; exit 1
-  fi
+  git clone "$REPO_URL" "$APP_DIR"
 fi
 
 cd "$APP_DIR"
 ok "Repositório em $APP_DIR"
 
-# ── 4. .env interactive prompts ────────────────────────────────────────────
+# ── 4. .env config ─────────────────────────────────────────────────────────
 if [[ ! -f .env ]]; then
   step "Configurando variáveis de ambiente..."
   echo
-  read -rp "NEXT_PUBLIC_SUPABASE_URL (https://xxx.supabase.co): " SUPA_URL
-  read -rp "NEXT_PUBLIC_SUPABASE_ANON_KEY: " SUPA_KEY
-  read -rp "NEXT_PUBLIC_ADMIN_PASSWORD (senha do painel admin): " ADMIN_PWD
-  read -rp "Domínio (ex: xtaskflow.shop) — deixe vazio se for usar só IP: " DOMAIN
+
+  SUPA_URL=$(ask "NEXT_PUBLIC_SUPABASE_URL")
+  SUPA_KEY=$(ask "NEXT_PUBLIC_SUPABASE_ANON_KEY")
+  ADMIN_PWD=$(ask "NEXT_PUBLIC_ADMIN_PASSWORD (senha do painel)")
+
+  # Pick port — avoid conflicts with other apps
+  SUGGESTED_PORT=$(pick_free_port)
+  if port_in_use 3000; then
+    warn "Porta 3000 já está em uso (outro app). Sugerindo $SUGGESTED_PORT."
+  fi
+  APP_PORT=$(ask "Porta para o app (host)" "$SUGGESTED_PORT")
+  if port_in_use "$APP_PORT"; then
+    err "Porta $APP_PORT já em uso. Escolha outra."
+    exit 1
+  fi
+
+  DOMAIN=$(ask "Domínio (ex: xtaskflow.shop) — vazio se for usar só IP" "")
 
   CRON=$(openssl rand -hex 32)
 
@@ -83,40 +117,37 @@ NEXT_PUBLIC_SUPABASE_URL=$SUPA_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY=$SUPA_KEY
 NEXT_PUBLIC_ADMIN_PASSWORD=$ADMIN_PWD
 CRON_SECRET=$CRON
+APP_PORT=$APP_PORT
+DOMAIN=$DOMAIN
 EOF
   chmod 600 .env
-  ok ".env criado com permissão 600"
+  ok ".env criado (porta $APP_PORT, domínio: ${DOMAIN:-IP only})"
 else
-  warn ".env já existe — pulando (edite manualmente se precisar)"
-  DOMAIN=$(grep -oP '(?<=^DOMAIN=).*' .env 2>/dev/null || echo "")
+  ok ".env já existe — usando valores existentes"
+  # shellcheck disable=SC1091
+  source <(grep -E '^(APP_PORT|DOMAIN|CRON_SECRET)=' .env)
 fi
 
-# ── 5. Build & start Docker ────────────────────────────────────────────────
+# ── 5. Build & start ───────────────────────────────────────────────────────
 step "Construindo imagem Docker e subindo container..."
 docker compose down 2>/dev/null || true
 docker compose up -d --build
 
-# Wait a bit and check health
-sleep 8
-if docker compose ps | grep -q "healthy\|running"; then
-  ok "Container TaskFlow rodando em :3000"
-else
-  err "Container não iniciou — veja: docker compose logs app"
+sleep 10
+if ! docker compose ps --status running 2>/dev/null | grep -q taskflow; then
+  err "Container não iniciou. Logs:"
+  docker compose logs --tail=30 app
   exit 1
 fi
+ok "Container TaskFlow rodando em :${APP_PORT:-3000}"
 
-# ── 6. Firewall ────────────────────────────────────────────────────────────
-step "Configurando firewall (UFW)..."
-ufw allow 22/tcp >/dev/null
-ufw allow 80/tcp >/dev/null
-ufw allow 443/tcp >/dev/null
-echo "y" | ufw enable >/dev/null 2>&1 || true
-ok "Firewall ativo (22, 80, 443 abertos)"
-
-# ── 7. Nginx ──────────────────────────────────────────────────────────────
-step "Configurando Nginx..."
+# ── 6. Nginx (only adds new site, doesn't touch existing) ─────────────────
 SERVER_NAME="${DOMAIN:-_}"
-cat > /etc/nginx/sites-available/taskflow <<EOF
+NGINX_CONF="/etc/nginx/sites-available/taskflow"
+
+step "Adicionando bloco Nginx para taskflow..."
+cat > "$NGINX_CONF" <<EOF
+# TaskFlow site — added by setup-vps.sh
 server {
     listen 80;
     listen [::]:80;
@@ -125,7 +156,7 @@ server {
     client_max_body_size 25M;
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:${APP_PORT:-3000};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -139,39 +170,53 @@ server {
 }
 EOF
 
-ln -sf /etc/nginx/sites-available/taskflow /etc/nginx/sites-enabled/taskflow
-rm -f /etc/nginx/sites-enabled/default
-nginx -t >/dev/null 2>&1 && systemctl reload nginx
-ok "Nginx configurado (HTTP)"
+ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/taskflow
 
-# ── 8. Cron for reminders ─────────────────────────────────────────────────
+if nginx -t 2>/dev/null; then
+  systemctl reload nginx
+  ok "Nginx recarregado (outros sites preservados)"
+else
+  err "nginx -t falhou. Removendo config nova pra não quebrar nada:"
+  nginx -t || true
+  rm /etc/nginx/sites-enabled/taskflow
+  exit 1
+fi
+
+# ── 7. Cron de lembretes ──────────────────────────────────────────────────
 step "Adicionando cron de lembretes..."
 CRON_SECRET_VALUE=$(grep -oP '(?<=^CRON_SECRET=).*' "$APP_DIR/.env")
-TARGET_HOST="${DOMAIN:-127.0.0.1}"
-[[ -z "$DOMAIN" ]] && TARGET_HOST="127.0.0.1:3000"
+TARGET_HOST="127.0.0.1:${APP_PORT:-3000}"
 
 CRON_LINE="* * * * * curl -fsS -X POST -H \"Authorization: Bearer $CRON_SECRET_VALUE\" http://$TARGET_HOST/api/cron/reminders >/dev/null 2>&1"
 
-# Remove old taskflow lines and re-add
+# Idempotent: remove old taskflow line and re-add
 (crontab -l 2>/dev/null | grep -v "/api/cron/reminders" || true; echo "$CRON_LINE") | crontab -
-ok "Cron rodará a cada minuto (alvo: $TARGET_HOST)"
+ok "Cron rodará a cada minuto chamando $TARGET_HOST"
 
-# ── 9. Summary ────────────────────────────────────────────────────────────
+# ── 8. Summary ────────────────────────────────────────────────────────────
 echo
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}✓ Setup completo!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo
+
 IP=$(curl -fsS https://ipv4.icanhazip.com 2>/dev/null || hostname -I | awk '{print $1}')
-echo "  → Acesse pelo IP:  http://$IP"
-[[ -n "$DOMAIN" ]] && echo "  → Acesse pelo domínio: http://$DOMAIN (após DNS apontar pra $IP)"
+echo "  → Acesso direto:  http://$IP:${APP_PORT:-3000}"
+echo "  → Via Nginx:      http://$IP  (responde em $SERVER_NAME)"
+[[ -n "${DOMAIN:-}" ]] && echo "  → Domínio:        http://$DOMAIN  (após DNS apontar para $IP)"
 echo
+
 echo "Próximos passos:"
-[[ -n "$DOMAIN" ]] && echo "  1. Aponte o A record de $DOMAIN para $IP no seu registrador"
-[[ -n "$DOMAIN" ]] && echo "  2. Habilite SSL: certbot --nginx -d $DOMAIN"
-echo "  3. Trocar senha root: passwd"
-echo "  4. (Opcional) configurar SSH key e desabilitar login por senha"
+n=1
+[[ -n "${DOMAIN:-}" ]] && echo "  $n. Aponte $DOMAIN para $IP no painel da Hostinger" && n=$((n+1))
+[[ -n "${DOMAIN:-}" ]] && echo "  $n. Habilite SSL: certbot --nginx -d $DOMAIN" && n=$((n+1))
+echo "  $n. (Importante) Trocar senha root: passwd"
 echo
-echo "Útil:"
-echo "  cd $APP_DIR && docker compose logs -f app    (ver logs em tempo real)"
-echo "  cd $APP_DIR && ./scripts/deploy.sh           (atualizar após git pull)"
+
+echo "Comandos úteis:"
+echo "  cd $APP_DIR && docker compose logs -f app    # logs"
+echo "  cd $APP_DIR && ./scripts/deploy.sh           # atualizar"
+echo "  curl -X POST -H \"Authorization: Bearer \$CRON_SECRET\" http://$TARGET_HOST/api/cron/reminders"
+echo
+
+echo -e "${YELLOW}⚠ NÃO toquei em UFW nem em outros sites Nginx — você decide se precisa abrir alguma porta a mais.${NC}"
