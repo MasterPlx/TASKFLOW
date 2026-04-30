@@ -119,33 +119,32 @@ async function handleRequest(req: Request): Promise<Response> {
   const clientMap = new Map<string, ClientRow>(clients.map((c) => [c.id, c]));
 
   // ── Send + mark ────────────────────────────────────────────────────────
+  // Reminders ALWAYS go to the admin (the agency operator), with the client
+  // name included in the message so they know which account it's about.
   let sent = 0;
   let skipped = 0;
 
-  for (const task of dueByOffset) {
-    const recipient = task.client_id
-      ? (() => {
-          const c = clientMap.get(task.client_id!);
-          if (!c?.phone || !c.callmebot_key) return null;
-          return { phone: c.phone, key: c.callmebot_key, name: c.brand_name ?? c.name };
-        })()
-      : settings?.admin_phone && settings.admin_callmebot_key
-        ? {
-            phone: settings.admin_phone,
-            key: settings.admin_callmebot_key,
-            name: settings.admin_name ?? 'Admin',
-          }
-        : null;
+  const adminRecipient =
+    settings?.admin_phone && settings.admin_callmebot_key
+      ? {
+          phone: settings.admin_phone,
+          key: settings.admin_callmebot_key,
+          name: settings.admin_name ?? 'Admin',
+        }
+      : null;
 
-    if (!recipient) {
+  for (const task of dueByOffset) {
+    if (!adminRecipient) {
       skipped++;
-      // Still mark as "sent" so we don't keep retrying a task with no recipient
+      // No admin configured — still mark as sent so we don't loop forever
       await supabase
         .from('tasks')
         .update({ reminder_sent_at: new Date().toISOString() })
         .eq('id', task.id);
       continue;
     }
+
+    const recipient = adminRecipient;
 
     const dateStr = task.due_date
       ? new Date(`${task.due_date}T00:00:00`).toLocaleDateString('pt-BR', {
@@ -154,7 +153,16 @@ async function handleRequest(req: Request): Promise<Response> {
         })
       : 'em breve';
 
-    const message = `🔔 Lembrete: ${task.title}\nPrazo: ${dateStr}\nPrioridade: ${task.priority}`;
+    // Include client name so admin knows which account
+    const clientName = task.client_id
+      ? (() => {
+          const c = clientMap.get(task.client_id);
+          return c ? c.brand_name ?? c.name : null;
+        })()
+      : null;
+
+    const clientLine = clientName ? `Cliente: ${clientName}\n` : '';
+    const message = `🔔 Lembrete: ${task.title}\n${clientLine}Prazo: ${dateStr}\nPrioridade: ${task.priority}`;
 
     const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(
       recipient.phone,

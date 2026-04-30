@@ -6,7 +6,10 @@ import { Loader2 } from 'lucide-react';
 import { getClientById } from '@/lib/supabase';
 import type { Client } from '@/lib/types';
 import { TasksView } from '@/components/tasks/TasksView';
-import { notifyTaskCreatedByAdmin } from '@/lib/notifications';
+import {
+  notifyTaskCompletedByAdmin,
+  notifyTaskCreatedByAdmin,
+} from '@/lib/notifications';
 
 export default function ClienteTasksPage() {
   const params = useParams<{ id: string }>();
@@ -53,6 +56,7 @@ export default function ClienteTasksPage() {
       authorName="Admin"
       brandColor={client.brand_color ?? undefined}
       onTaskCreated={(t) => notifyTaskCreatedByAdmin(client, t)}
+      onTaskCompleted={(t) => notifyTaskCompletedByAdmin(client, t)}
     />
   );
 }

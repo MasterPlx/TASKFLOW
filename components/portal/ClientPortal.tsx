@@ -124,20 +124,35 @@ export function ClientPortal({ client }: { client: Client }) {
 
   return (
     <div className="min-h-screen bg-surface">
-      {/* Hero with brand color background */}
+      {/* Hero with brand color background — gradient softens saturated colors */}
       <header className="relative overflow-hidden">
+        {/* Solid base */}
         <div className="absolute inset-0" style={{ backgroundColor: accent }} aria-hidden />
-        {/* Subtle decorative gradient on top */}
+        {/* Diagonal darkening: top-left lighter, bottom-right darker. This adds
+            depth and tames very saturated colors (pure red, pure cyan, etc.). */}
         <div
           className="absolute inset-0"
           style={{
-            background: `radial-gradient(60% 80% at 0% 0%, ${hexToRgba(
-              '#FFFFFF',
-              0.18,
-            )} 0%, transparent 60%), radial-gradient(50% 70% at 100% 100%, ${hexToRgba(
-              '#000000',
-              0.18,
-            )} 0%, transparent 50%)`,
+            backgroundImage:
+              `linear-gradient(135deg, ${hexToRgba('#FFFFFF', 0.10)} 0%, transparent 35%, ${hexToRgba('#000000', 0.35)} 100%)`,
+          }}
+          aria-hidden
+        />
+        {/* Subtle radial highlight (soft glow top-left) */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              `radial-gradient(70% 90% at 0% 0%, ${hexToRgba('#FFFFFF', 0.12)} 0%, transparent 60%)`,
+          }}
+          aria-hidden
+        />
+        {/* Tiny noise/texture using SVG to break up the flat color */}
+        <div
+          className="absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage:
+              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.6'/></svg>\")",
           }}
           aria-hidden
         />

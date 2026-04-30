@@ -105,6 +105,23 @@ export async function notifyTaskCompletedByClient(client: Client, task: Task): P
   });
 }
 
+/**
+ * Admin marked a client task as complete → notify the client so they know
+ * the work is done. Uses the same task_completed_template.
+ */
+export async function notifyTaskCompletedByAdmin(client: Client, task: Task): Promise<void> {
+  if (!client.phone || !client.callmebot_key) return;
+  const settings = await loadSettings();
+  const template = settings?.task_completed_template || FALLBACKS.task_completed;
+  await sendViaApi({
+    phone: client.phone,
+    key: client.callmebot_key,
+    message: render(template, { title: task.title }),
+    clientId: client.id,
+    taskId: task.id,
+  });
+}
+
 export async function sendReminder(client: Client, pendingTasks: Task[]): Promise<void> {
   if (!client.phone || !client.callmebot_key) return;
   const settings = await loadSettings();
