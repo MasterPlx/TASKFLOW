@@ -307,34 +307,35 @@ export function TaskDetail({
               </ul>
             )}
 
-            {!readOnly && (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="btn-secondary"
-                  disabled={uploading}
-                >
-                  {uploading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Upload className="h-3.5 w-3.5" />
-                  )}
-                  Enviar arquivo
-                </button>
-                <input ref={fileRef} type="file" className="hidden" onChange={handleUploadFile} />
-                <button
-                  type="button"
-                  onClick={() => setShowUrlForm((v) => !v)}
-                  className="btn-secondary"
-                >
-                  <Link2 className="h-3.5 w-3.5" />
-                  Adicionar URL
-                </button>
-              </div>
-            )}
+            {/* Adding attachments is allowed for both admin AND clients — it's
+                the channel for them to share briefings, references, etc.
+                Only DELETE is restricted to admin (gated above). */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="btn-secondary"
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                Enviar arquivo
+              </button>
+              <input ref={fileRef} type="file" className="hidden" onChange={handleUploadFile} />
+              <button
+                type="button"
+                onClick={() => setShowUrlForm((v) => !v)}
+                className="btn-secondary"
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                Adicionar URL
+              </button>
+            </div>
 
-            {!readOnly && showUrlForm && (
+            {showUrlForm && (
               <div className="mt-3 space-y-2 rounded-lg border border-border bg-surface-sunken/50 p-3">
                 <input
                   className="input"
@@ -366,12 +367,6 @@ export function TaskDetail({
                   </button>
                 </div>
               </div>
-            )}
-
-            {readOnly && attachments.length === 0 && (
-              <p className="rounded-lg border border-dashed border-border-strong px-3 py-3 text-center text-xs text-ink-faint">
-                Sem anexos nesta tarefa
-              </p>
             )}
           </section>
 

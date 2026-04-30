@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { getClientById } from '@/lib/supabase';
 import type { Client } from '@/lib/types';
 import { TasksView } from '@/components/tasks/TasksView';
@@ -16,15 +16,22 @@ export default function ClienteTasksPage() {
   const id = params?.id;
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     let mounted = true;
     (async () => {
-      const c = await getClientById(id);
-      if (!mounted) return;
-      setClient(c);
-      setLoading(false);
+      try {
+        const c = await getClientById(id);
+        if (!mounted) return;
+        setClient(c);
+      } catch (err) {
+        console.error('[clientesId] load failed', err);
+        if (mounted) setLoadError('Não foi possível carregar este cliente. Tente recarregar a página.');
+      } finally {
+        if (mounted) setLoading(false);
+      }
     })();
     return () => {
       mounted = false;
@@ -39,10 +46,21 @@ export default function ClienteTasksPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-6xl px-8 py-8">
+        <div className="card-tint-rose flex items-start gap-3 p-4">
+          <AlertCircle className="mt-0.5 h-4 w-4 flex-none text-accent-rose-700" />
+          <p className="text-sm text-accent-rose-700">{loadError}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!client) {
     return (
       <div className="mx-auto max-w-6xl px-8 py-8">
-        <p className="text-sm text-gray-500">Cliente não encontrado.</p>
+        <p className="text-sm text-ink-subtle">Cliente não encontrado.</p>
       </div>
     );
   }

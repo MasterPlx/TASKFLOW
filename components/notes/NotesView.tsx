@@ -57,6 +57,9 @@ export function NotesView() {
         if (!mounted) return;
         setGroups(g);
         setNotes(n);
+      } catch (err) {
+        console.error('[notes] load failed', err);
+        if (mounted) toast('Não foi possível carregar suas notas', 'error');
       } finally {
         if (mounted) setLoading(false);
       }
@@ -64,7 +67,7 @@ export function NotesView() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [toast]);
 
   // Notes filtered by selected group
   const groupNotes = useMemo(() => {
@@ -710,7 +713,7 @@ function NoteEditor({
               className="inline-flex items-center gap-1 rounded-md bg-accent-rose-50 px-2 py-0.5 font-medium text-accent-rose-700 hover:bg-accent-rose-100"
             >
               <AlertCircle className="h-3 w-3" />
-              Falha ao salvar — tentar de novo
+              Alterações não salvas — clique pra tentar
             </button>
           )}
           {savingState === 'idle' && `Atualizado ${formatRelative(note.updated_at)}`}

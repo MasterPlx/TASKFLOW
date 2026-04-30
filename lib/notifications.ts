@@ -107,11 +107,7 @@ export async function notifyTaskCreatedByClient(client: Client, task: Task): Pro
     lines.push(`Detalhes: ${desc}`);
   }
   if (task.due_date) {
-    const d = new Date(`${task.due_date}T12:00:00`).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-    });
-    lines.push(`Prazo desejado: ${d}`);
+    lines.push(`Prazo desejado: ${formatDate(task.due_date)}`);
   }
   return sendViaApi({
     phone: admin.phone,

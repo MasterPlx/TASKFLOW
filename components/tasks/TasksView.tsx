@@ -72,23 +72,34 @@ export function TasksView({
     let mounted = true;
     setLoading(true);
     (async () => {
-      const data = await listTasks({ clientId });
-      if (!mounted) return;
-      setTasks(data);
-      setLoading(false);
-      const counts: Record<string, { comments: number; attachments: number }> = {};
-      await Promise.all(
-        data.map(async (t) => {
-          const [cs, as] = await Promise.all([listComments(t.id), listAttachments(t.id)]);
-          counts[t.id] = { comments: cs.length, attachments: as.length };
-        }),
-      );
-      if (mounted) setMeta(counts);
+      try {
+        const data = await listTasks({ clientId });
+        if (!mounted) return;
+        setTasks(data);
+        // Best-effort meta counts; if these fail, the list still renders
+        const counts: Record<string, { comments: number; attachments: number }> = {};
+        await Promise.all(
+          data.map(async (t) => {
+            try {
+              const [cs, as] = await Promise.all([listComments(t.id), listAttachments(t.id)]);
+              counts[t.id] = { comments: cs.length, attachments: as.length };
+            } catch {
+              // Skip meta for this task — list still works
+            }
+          }),
+        );
+        if (mounted) setMeta(counts);
+      } catch (err) {
+        console.error('[tasks] load failed', err);
+        if (mounted) toast('Não foi possível carregar as tarefas', 'error');
+      } finally {
+        if (mounted) setLoading(false);
+      }
     })();
     return () => {
       mounted = false;
     };
-  }, [clientId]);
+  }, [clientId, toast]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

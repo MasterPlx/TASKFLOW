@@ -49,23 +49,33 @@ export function ClientPortal({ client }: { client: Client }) {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const data = await listTasks({ clientId: client.id });
-      if (!mounted) return;
-      setTasks(data);
-      setLoading(false);
-      const counts: Record<string, { comments: number; attachments: number }> = {};
-      await Promise.all(
-        data.map(async (t) => {
-          const [cs, as] = await Promise.all([listComments(t.id), listAttachments(t.id)]);
-          counts[t.id] = { comments: cs.length, attachments: as.length };
-        }),
-      );
-      if (mounted) setMeta(counts);
+      try {
+        const data = await listTasks({ clientId: client.id });
+        if (!mounted) return;
+        setTasks(data);
+        const counts: Record<string, { comments: number; attachments: number }> = {};
+        await Promise.all(
+          data.map(async (t) => {
+            try {
+              const [cs, as] = await Promise.all([listComments(t.id), listAttachments(t.id)]);
+              counts[t.id] = { comments: cs.length, attachments: as.length };
+            } catch {
+              // Skip meta — list still works
+            }
+          }),
+        );
+        if (mounted) setMeta(counts);
+      } catch (err) {
+        console.error('[portal] load failed', err);
+        if (mounted) toast('Não foi possível carregar as tarefas', 'error');
+      } finally {
+        if (mounted) setLoading(false);
+      }
     })();
     return () => {
       mounted = false;
     };
-  }, [client.id]);
+  }, [client.id, toast]);
 
   const metrics = useMemo(() => {
     const pending = tasks.filter((t) => t.status === 'pendente').length;
@@ -104,7 +114,10 @@ export function ClientPortal({ client }: { client: Client }) {
           setTasks((prevList) => [created, ...prevList]);
           toast(`Tarefa recorrente reagendada para ${formatDate(nextDate)}`, 'info');
         }
-        await notifyTaskCompletedByClient(client, saved);
+        const ok = await notifyTaskCompletedByClient(client, saved);
+        if (ok === false) {
+          toast('Tarefa concluída — falha ao enviar confirmação WhatsApp', 'info');
+        }
       }
     } catch (err) {
       console.error(err);
@@ -312,7 +325,10 @@ export function ClientPortal({ client }: { client: Client }) {
         simplified
         onSaved={async (t) => {
           applyTask(t);
-          await notifyTaskCreatedByClient(client, t);
+          const ok = await notifyTaskCreatedByClient(client, t);
+          if (ok === false) {
+            toast('Pedido criado — sem aviso WhatsApp (admin sem config)', 'info');
+          }
         }}
       />
 

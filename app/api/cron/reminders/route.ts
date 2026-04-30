@@ -147,32 +147,19 @@ async function handleRequest(req: Request): Promise<Response> {
   for (const task of dueByOffset) {
     const attempts = task.reminder_attempts ?? 0;
 
-    // No admin configured → log to notifications, retry on next minute
+    // No admin configured → log a SYSTEM error (client_id=null so it doesn't
+    // leak into the client's portal view) and DO NOT consume retry budget.
+    // Once the admin configures their WhatsApp, the next cron tick will send.
     if (!adminRecipient) {
-      await supabase.from('notifications').insert({
-        client_id: task.client_id,
+      const { error: insErr } = await supabase.from('notifications').insert({
+        client_id: null, // system-level error, not client-facing
         task_id: task.id,
-        message: `⚠️ Lembrete não enviado: admin sem WhatsApp configurado. Tarefa: ${task.title}`,
+        message: `⚠️ Lembrete pendente: configure seu WhatsApp em /admin/configuracoes. Tarefa: ${task.title}`,
         channel: 'whatsapp',
         status: 'failed',
       });
-      // After MAX_ATTEMPTS, give up so we don't keep alerting forever
-      if (attempts + 1 >= MAX_ATTEMPTS) {
-        await supabase
-          .from('tasks')
-          .update({
-            reminder_sent_at: new Date().toISOString(),
-            reminder_attempts: attempts + 1,
-          })
-          .eq('id', task.id);
-        givenUp++;
-      } else {
-        await supabase
-          .from('tasks')
-          .update({ reminder_attempts: attempts + 1 })
-          .eq('id', task.id);
-        skipped++;
-      }
+      if (insErr) console.error('[cron] notification insert failed', insErr);
+      skipped++;
       continue;
     }
 
@@ -213,44 +200,50 @@ async function handleRequest(req: Request): Promise<Response> {
     }
 
     if (ok) {
-      await supabase
+      const { error: updErr } = await supabase
         .from('tasks')
         .update({
           reminder_sent_at: new Date().toISOString(),
           reminder_attempts: attempts + 1,
         })
         .eq('id', task.id);
-      await supabase.from('notifications').insert({
+      if (updErr) console.error('[cron] task update failed', updErr);
+      const { error: notifErr } = await supabase.from('notifications').insert({
         client_id: task.client_id,
         task_id: task.id,
         message,
         channel: 'whatsapp',
         status: 'sent',
       });
+      if (notifErr) console.error('[cron] sent-notification insert failed', notifErr);
       sent++;
     } else {
-      // Failed — log it, increment attempts, give up after MAX
-      await supabase.from('notifications').insert({
-        client_id: task.client_id,
+      // Failed — log it (system-level, client_id=null so client doesn't see),
+      // increment attempts, give up after MAX
+      const { error: notifErr } = await supabase.from('notifications').insert({
+        client_id: null, // failure log = system-side, not client-visible
         task_id: task.id,
         message: `❌ Falha no envio (tentativa ${attempts + 1}/${MAX_ATTEMPTS}): ${message}`,
         channel: 'whatsapp',
         status: 'failed',
       });
+      if (notifErr) console.error('[cron] failed-notification insert failed', notifErr);
       if (attempts + 1 >= MAX_ATTEMPTS) {
-        await supabase
+        const { error: gErr } = await supabase
           .from('tasks')
           .update({
             reminder_sent_at: new Date().toISOString(),
             reminder_attempts: attempts + 1,
           })
           .eq('id', task.id);
+        if (gErr) console.error('[cron] given-up update failed', gErr);
         givenUp++;
       } else {
-        await supabase
+        const { error: aErr } = await supabase
           .from('tasks')
           .update({ reminder_attempts: attempts + 1 })
           .eq('id', task.id);
+        if (aErr) console.error('[cron] attempt-increment failed', aErr);
         failed++;
       }
     }
