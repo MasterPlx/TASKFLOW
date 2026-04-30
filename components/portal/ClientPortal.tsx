@@ -26,10 +26,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'concluída', label: 'Concluídas' },
 ];
 
-/**
- * Convert a hex color to a CSS-friendly RGBA string.
- * Used to layer translucent overlays of the brand color.
- */
+/** Convert a hex color to a CSS-friendly RGBA string. */
 function hexToRgba(hex: string, alpha: number): string {
   const m = hex.replace('#', '').match(/.{1,2}/g);
   if (!m || m.length < 3) return `rgba(124, 58, 237, ${alpha})`;
@@ -101,7 +98,6 @@ export function ClientPortal({ client }: { client: Client }) {
       const saved = await updateTask(task.id, { status: newStatus });
       applyTask(saved);
       if (newStatus === 'concluída' && prev !== 'concluída') {
-        // Always celebrate when client checks off — they're the customer
         fireConfetti(32, 0.5, 0.4);
         const { created, nextDate } = await maybeReschedule(saved);
         if (created) {
@@ -122,111 +118,133 @@ export function ClientPortal({ client }: { client: Client }) {
     await changeStatus(t, newStatus);
   }
 
+  // Shared brand-color helpers passed inline as CSS variables. This lets us
+  // do `bg-[var(--brand)]` in nested children without prop drilling.
+  const brandStyle = {
+    ['--brand' as string]: accent,
+    ['--brand-glow' as string]: hexToRgba(accent, 0.32),
+    ['--brand-soft' as string]: hexToRgba(accent, 0.12),
+  } as React.CSSProperties;
+
   return (
-    <div className="min-h-screen bg-surface">
-      {/* Hero with brand color background — strong gradient softens saturated colors */}
-      <header className="relative overflow-hidden">
-        {/* Solid base (the raw brand color) */}
-        <div className="absolute inset-0" style={{ backgroundColor: accent }} aria-hidden />
-        {/* Strong vertical darkening: top brighter, bottom-right much darker.
-            This is the workhorse — turns flat saturated colors into a depth field. */}
+    <div className="min-h-screen bg-surface" style={brandStyle}>
+      {/* ════════════════════════════════════════════════════════════════
+          HERO — editorial dark with brand-color atmosphere
+          ─────────────────────────────────────────────────────────────── */}
+      <header className="relative overflow-hidden border-b border-border/60 bg-surface-sunken/40">
+        {/* Atmospheric radial glow (the "soul" of this hero) */}
         <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              `linear-gradient(155deg, ${hexToRgba('#FFFFFF', 0.18)} 0%, transparent 30%, ${hexToRgba('#000000', 0.55)} 100%)`,
-          }}
+          className="absolute -left-[10%] -top-[60%] h-[700px] w-[700px] rounded-full opacity-50 blur-[120px]"
+          style={{ backgroundColor: accent }}
           aria-hidden
         />
-        {/* Light bloom in top-left (gives a "lit from above" feel) */}
+        {/* Counter glow (smaller, bottom-right) for spatial balance */}
         <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              `radial-gradient(60% 80% at 10% -10%, ${hexToRgba('#FFFFFF', 0.20)} 0%, transparent 55%)`,
-          }}
+          className="absolute -bottom-[40%] -right-[10%] h-[400px] w-[400px] rounded-full opacity-25 blur-[100px]"
+          style={{ backgroundColor: accent }}
           aria-hidden
         />
-        {/* Vignette in bottom-right corner */}
+        {/* Editorial grid pattern (very low opacity, gives "magazine spread" feel) */}
         <div
-          className="absolute inset-0"
+          className="absolute inset-0 opacity-[0.025] dark:opacity-[0.05]"
           style={{
             backgroundImage:
-              `radial-gradient(70% 100% at 100% 110%, ${hexToRgba('#000000', 0.40)} 0%, transparent 55%)`,
-          }}
-          aria-hidden
-        />
-        {/* Tiny SVG grain texture so cor sólida não pareça PVC */}
-        <div
-          className="absolute inset-0 opacity-[0.06] mix-blend-overlay"
-          style={{
-            backgroundImage:
-              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.7'/></svg>\")",
+              'linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
           }}
           aria-hidden
         />
 
-        <div className="relative mx-auto max-w-4xl px-6 pb-16 pt-8">
-          <div className="flex items-center gap-3">
+        <div className="relative mx-auto max-w-4xl px-6 pb-12 pt-14">
+          {/* Brand row */}
+          <div className="flex items-center gap-4">
             {client.brand_logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={client.brand_logo_url}
                 alt={displayName}
-                className="h-12 w-12 rounded-xl bg-white/20 object-cover backdrop-blur-sm"
+                className="h-14 w-14 flex-none rounded-2xl object-cover shadow-lg ring-1 ring-black/5 dark:ring-white/10"
               />
             ) : (
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
-                <ListTodo className="h-5 w-5 text-white" />
+              <span
+                className="flex h-14 w-14 flex-none items-center justify-center rounded-2xl text-white shadow-lg"
+                style={{
+                  backgroundColor: accent,
+                  boxShadow: `0 8px 28px -6px ${hexToRgba(accent, 0.55)}`,
+                }}
+              >
+                <ListTodo className="h-6 w-6" />
               </span>
             )}
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-white/70">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-ink-subtle">
                 Portal de tarefas
               </p>
-              <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-white">
+              <h1 className="mt-1 text-3xl font-bold tracking-tight text-ink md:text-4xl">
                 {displayName}
               </h1>
             </div>
+            {/* Vertical brand accent — stamps identity without dominating */}
+            <div
+              className="hidden h-12 w-1 flex-none rounded-full sm:block"
+              style={{
+                backgroundColor: accent,
+                boxShadow: `0 0 24px ${hexToRgba(accent, 0.7)}`,
+              }}
+              aria-hidden
+            />
           </div>
 
-          {/* Big progress headline */}
-          <div className="mt-8 grid gap-4 sm:grid-cols-[1fr,auto]">
-            <div>
-              <p className="text-sm text-white/80">
+          {/* Status / progress band — split layout */}
+          <div className="mt-10 grid gap-6 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div className="min-w-0">
+              <p className="text-sm text-ink-muted">
                 {metrics.total === 0
                   ? 'Você ainda não tem tarefas por aqui'
                   : metrics.percent === 100
-                    ? 'Tudo em dia! 🎉'
+                    ? 'Tudo em dia 🎉'
                     : `${metrics.pending + metrics.inProgress} ${
                         metrics.pending + metrics.inProgress === 1
                           ? 'tarefa em aberto'
                           : 'tarefas em aberto'
                       }`}
               </p>
-              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-white/20">
+              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-ink/[0.06] dark:bg-white/[0.08]">
                 <div
-                  className="h-full rounded-full bg-white transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
-                  style={{ width: `${metrics.percent}%` }}
+                  className="h-full rounded-full transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                  style={{
+                    width: `${metrics.percent}%`,
+                    backgroundColor: accent,
+                    boxShadow: `0 0 16px ${hexToRgba(accent, 0.6)}`,
+                  }}
                 />
               </div>
             </div>
-            <div className="flex items-end gap-3 text-right">
-              <p className="tabular text-5xl font-semibold tracking-tight text-white">
+            <div className="text-right">
+              <p
+                className="tabular text-5xl font-bold leading-none tracking-tight md:text-6xl"
+                style={{ color: accent }}
+              >
                 {metrics.percent}
-                <span className="text-2xl text-white/70">%</span>
+                <span className="ml-0.5 text-2xl text-ink-subtle">%</span>
+              </p>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+                concluído
               </p>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto -mt-8 max-w-4xl px-6 pb-12">
-        {/* Floating metric cards (sit on top of hero edge) */}
+      {/* ════════════════════════════════════════════════════════════════
+          CONTENT
+          ─────────────────────────────────────────────────────────────── */}
+      <main className="mx-auto max-w-4xl px-6 pb-16 pt-8">
+        {/* Floating metric cards — 3 column, tinted dark cards */}
         <section className="grid grid-cols-3 gap-3">
-          <MetricCard label="A fazer" value={metrics.pending} tint="amber" />
-          <MetricCard label="Em andamento" value={metrics.inProgress} tint="sky" />
-          <MetricCard label="Concluídas" value={metrics.done} tint="emerald" />
+          <BrandMetric label="A fazer" value={metrics.pending} accent={accent} tone="warm" />
+          <BrandMetric label="Em andamento" value={metrics.inProgress} accent={accent} tone="active" />
+          <BrandMetric label="Concluídas" value={metrics.done} accent={accent} tone="done" />
         </section>
 
         {/* Filters + add */}
@@ -255,7 +273,10 @@ export function ClientPortal({ client }: { client: Client }) {
             type="button"
             onClick={() => setModalOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium text-white shadow-elevated transition-transform hover:scale-[1.02] active:scale-[0.98]"
-            style={{ backgroundColor: accent }}
+            style={{
+              backgroundColor: accent,
+              boxShadow: `0 4px 16px -4px ${hexToRgba(accent, 0.5)}`,
+            }}
           >
             <Plus className="h-3.5 w-3.5" />
             Nova tarefa
@@ -306,50 +327,93 @@ export function ClientPortal({ client }: { client: Client }) {
   );
 }
 
-function MetricCard({
+// ── Metric card — variant of the brand color, contained intensity ────────────
+function BrandMetric({
   label,
   value,
-  tint,
+  accent,
+  tone,
 }: {
   label: string;
   value: number;
-  tint: 'amber' | 'sky' | 'emerald';
+  accent: string;
+  /** Determines which secondary color tone to apply */
+  tone: 'warm' | 'active' | 'done';
 }) {
-  const styles =
-    tint === 'amber'
-      ? { bg: 'card-tint-amber', value: 'text-accent-amber-700' }
-      : tint === 'sky'
-        ? { bg: 'card-tint-sky', value: 'text-accent-sky-700' }
-        : { bg: 'card-tint-emerald', value: 'text-accent-emerald-700' };
+  // Each tone uses neutral chrome but the value number is colored differently
+  const valueColor =
+    tone === 'warm'
+      ? 'text-accent-amber-700 dark:text-accent-amber-200'
+      : tone === 'active'
+        ? 'text-accent-sky-700 dark:text-accent-sky-200'
+        : 'text-accent-emerald-700 dark:text-accent-emerald-200';
+
+  const dotColor =
+    tone === 'warm'
+      ? 'bg-accent-amber-500'
+      : tone === 'active'
+        ? 'bg-accent-sky-500'
+        : 'bg-accent-emerald-500';
+
   return (
-    <div className={cn(styles.bg, 'p-4 shadow-elevated')}>
-      <p className="text-xs font-medium text-ink-muted">{label}</p>
-      <p className={cn('tabular mt-2 text-2xl font-semibold', styles.value)}>{value}</p>
+    <div className="card relative overflow-hidden p-4">
+      {/* Tiny brand-colored corner accent — ties the whole portal together */}
+      <div
+        aria-hidden
+        className="absolute -right-6 -top-6 h-12 w-12 rounded-full opacity-[0.07] blur-md"
+        style={{ backgroundColor: accent }}
+      />
+      <div className="relative flex items-center gap-1.5">
+        <span className={cn('dot', dotColor)} />
+        <p className="text-xs font-medium text-ink-muted">{label}</p>
+      </div>
+      <p className={cn('tabular relative mt-3 text-3xl font-bold tracking-tight', valueColor)}>
+        {value}
+      </p>
     </div>
   );
 }
 
+// ── Empty state ────────────────────────────────────────────────────────────
 function EmptyState({ onCreate, accent }: { onCreate: () => void; accent: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-card border border-dashed border-border-strong bg-surface-raised p-12 text-center">
+    <div className="relative overflow-hidden rounded-card border border-dashed border-border-strong bg-surface-raised p-12 text-center">
+      {/* Subtle brand-colored ambient glow inside the empty state */}
       <div
-        className="flex h-12 w-12 items-center justify-center rounded-2xl text-white"
+        aria-hidden
+        className="absolute -top-1/2 left-1/2 h-[300px] w-[300px] -translate-x-1/2 rounded-full opacity-[0.06] blur-[80px]"
         style={{ backgroundColor: accent }}
-      >
-        <ListTodo className="h-5 w-5" />
+      />
+      <div className="relative flex flex-col items-center gap-3">
+        <div
+          className="flex h-14 w-14 items-center justify-center rounded-2xl text-white"
+          style={{
+            backgroundColor: accent,
+            boxShadow: `0 12px 32px -8px ${hexToRgba(accent, 0.5)}`,
+          }}
+        >
+          <ListTodo className="h-6 w-6" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-base font-semibold tracking-tight text-ink">
+            Nenhuma tarefa por aqui
+          </p>
+          <p className="text-xs text-ink-subtle">
+            Crie a primeira tarefa para começar a acompanhar seus pedidos
+          </p>
+        </div>
+        <button
+          onClick={onCreate}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white"
+          style={{
+            backgroundColor: accent,
+            boxShadow: `0 4px 16px -4px ${hexToRgba(accent, 0.5)}`,
+          }}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Criar primeira tarefa
+        </button>
       </div>
-      <p className="text-sm font-semibold text-ink">Nenhuma tarefa por aqui</p>
-      <p className="text-xs text-ink-subtle">
-        Crie a primeira tarefa para começar a acompanhar seus pedidos
-      </p>
-      <button
-        onClick={onCreate}
-        className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium text-white"
-        style={{ backgroundColor: accent }}
-      >
-        <Sparkles className="h-3.5 w-3.5" />
-        Criar primeira tarefa
-      </button>
     </div>
   );
 }
