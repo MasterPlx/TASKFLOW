@@ -77,9 +77,26 @@ export function statusClasses(s: Status): string {
   }
 }
 
+/**
+ * Parse a date string into a local-timezone Date.
+ *
+ * Supabase returns DATE columns as `YYYY-MM-DD`, which `new Date(s)` parses
+ * as UTC midnight. In Brazil (UTC-3) that becomes 21:00 the previous day —
+ * making "today" tasks look overdue in the evening before. Anchoring at
+ * local noon neutralises any timezone offset within ±12h.
+ */
+function parseLocal(iso: string): Date {
+  // Detect bare date `YYYY-MM-DD` and inject a local noon time
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    return new Date(`${iso}T12:00:00`);
+  }
+  return new Date(iso);
+}
+
 export function isOverdue(dueDate: string | null, status: Status): boolean {
   if (!dueDate || status === 'concluída') return false;
-  const d = new Date(dueDate);
+  const d = parseLocal(dueDate);
+  d.setHours(0, 0, 0, 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return d.getTime() < today.getTime();
@@ -87,7 +104,7 @@ export function isOverdue(dueDate: string | null, status: Status): boolean {
 
 export function formatDate(iso: string | null): string {
   if (!iso) return '—';
-  const d = new Date(iso);
+  const d = parseLocal(iso);
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
@@ -107,11 +124,23 @@ export function formatRelative(iso: string): string {
 
 export function nextDueDate(current: string | null, recurrence: Recurrence): string | null {
   if (recurrence === 'none') return null;
-  const base = current ? new Date(current) : new Date();
+  const base = current ? parseLocal(current) : new Date();
   if (recurrence === 'daily') base.setDate(base.getDate() + 1);
   if (recurrence === 'weekly') base.setDate(base.getDate() + 7);
-  if (recurrence === 'monthly') base.setMonth(base.getMonth() + 1);
-  return base.toISOString().slice(0, 10);
+  if (recurrence === 'monthly') {
+    // setMonth(+1) on Jan 31 produces Mar 3 (overflow) — clamp to last
+    // valid day of the target month instead. So Jan 31 → Feb 28/29.
+    const day = base.getDate();
+    base.setDate(1);
+    base.setMonth(base.getMonth() + 1);
+    const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+    base.setDate(Math.min(day, lastDay));
+  }
+  // Format manually to avoid TZ shifts in toISOString()
+  const yyyy = base.getFullYear();
+  const mm = String(base.getMonth() + 1).padStart(2, '0');
+  const dd = String(base.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 export function initials(name: string): string {

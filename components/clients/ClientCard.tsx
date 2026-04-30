@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Copy, MessageCircle, ArrowRight, Trash2, Loader2, Phone } from 'lucide-react';
 import { useState } from 'react';
 import type { Client, Task } from '@/lib/types';
+import { isNotifiableClient } from '@/lib/domain';
 import { initials } from '@/lib/utils';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -23,7 +24,7 @@ export function ClientCard({
   doneCount: number;
   pendingTasks: Task[];
   onDelete: (id: string) => Promise<void> | void;
-  onSendReminder: (client: Client, pending: Task[]) => Promise<void> | void;
+  onSendReminder: (client: Client, pending: Task[]) => Promise<boolean | void> | boolean | void;
 }) {
   const { toast } = useToast();
   const { confirm } = useConfirm();
@@ -40,7 +41,7 @@ export function ClientCard({
   }
 
   async function handleReminder() {
-    if (!client.phone || !client.callmebot_key) {
+    if (!isNotifiableClient(client)) {
       toast('Cliente sem WhatsApp ou API Key', 'error');
       return;
     }
@@ -50,8 +51,12 @@ export function ClientCard({
     }
     setBusy('reminder');
     try {
-      await onSendReminder(client, pendingTasks);
-      toast('Lembrete enviado', 'success');
+      const ok = await onSendReminder(client, pendingTasks);
+      if (ok === false) {
+        toast('Lembrete falhou — verifique o WhatsApp do cliente', 'error');
+      } else {
+        toast('Lembrete enviado', 'success');
+      }
     } catch {
       toast('Erro ao enviar lembrete', 'error');
     } finally {

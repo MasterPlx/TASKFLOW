@@ -292,45 +292,49 @@ export function TaskDetail({
                       <ExternalLink className="h-3.5 w-3.5 flex-none text-ink-faint" />
                       <span className="truncate">{a.file_name}</span>
                     </a>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteAttachment(a.id, a.file_name)}
-                      className="ml-2 hidden rounded p-1 text-ink-faint hover:bg-accent-rose-50 hover:text-accent-rose-700 group-hover:block"
-                      aria-label="Remover anexo"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAttachment(a.id, a.file_name)}
+                        className="ml-2 hidden rounded p-1 text-ink-faint hover:bg-accent-rose-50 hover:text-accent-rose-700 group-hover:block"
+                        aria-label="Remover anexo"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="btn-secondary"
-                disabled={uploading}
-              >
-                {uploading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Upload className="h-3.5 w-3.5" />
-                )}
-                Enviar arquivo
-              </button>
-              <input ref={fileRef} type="file" className="hidden" onChange={handleUploadFile} />
-              <button
-                type="button"
-                onClick={() => setShowUrlForm((v) => !v)}
-                className="btn-secondary"
-              >
-                <Link2 className="h-3.5 w-3.5" />
-                Adicionar URL
-              </button>
-            </div>
+            {!readOnly && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="btn-secondary"
+                  disabled={uploading}
+                >
+                  {uploading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Upload className="h-3.5 w-3.5" />
+                  )}
+                  Enviar arquivo
+                </button>
+                <input ref={fileRef} type="file" className="hidden" onChange={handleUploadFile} />
+                <button
+                  type="button"
+                  onClick={() => setShowUrlForm((v) => !v)}
+                  className="btn-secondary"
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                  Adicionar URL
+                </button>
+              </div>
+            )}
 
-            {showUrlForm && (
+            {!readOnly && showUrlForm && (
               <div className="mt-3 space-y-2 rounded-lg border border-border bg-surface-sunken/50 p-3">
                 <input
                   className="input"
@@ -363,6 +367,12 @@ export function TaskDetail({
                 </div>
               </div>
             )}
+
+            {readOnly && attachments.length === 0 && (
+              <p className="rounded-lg border border-dashed border-border-strong px-3 py-3 text-center text-xs text-ink-faint">
+                Sem anexos nesta tarefa
+              </p>
+            )}
           </section>
 
           <section>
@@ -393,14 +403,16 @@ export function TaskDetail({
                         <span className="font-semibold text-ink">{c.author}</span>
                         <span className="text-ink-faint">·</span>
                         <span>{formatRelative(c.created_at)}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteComment(c.id)}
-                          className="ml-auto hidden rounded p-0.5 text-ink-faint hover:bg-accent-rose-50 hover:text-accent-rose-700 group-hover:block"
-                          aria-label="Excluir comentário"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteComment(c.id)}
+                            className="ml-auto hidden rounded p-0.5 text-ink-faint hover:bg-accent-rose-50 hover:text-accent-rose-700 group-hover:block"
+                            aria-label="Excluir comentário"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                       <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink-muted">
                         {c.content}

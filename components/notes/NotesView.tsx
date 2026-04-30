@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  AlertCircle,
 } from 'lucide-react';
 import {
   createNote,
@@ -569,7 +570,7 @@ function NoteEditor({
 }) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
-  const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const moveDropdownRef = useRef<HTMLDivElement | null>(null);
 
@@ -588,8 +589,10 @@ function NoteEditor({
         onChange(saved);
         setSavingState('saved');
         setTimeout(() => setSavingState('idle'), 1500);
-      } catch {
-        setSavingState('idle');
+      } catch (err) {
+        // Surface the failure visibly — user must know their typing wasn't saved
+        console.error('[notes] autosave failed', err);
+        setSavingState('error');
       }
     },
     [note.id, onChange],
@@ -606,6 +609,11 @@ function NoteEditor({
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [title, content, note.title, note.content, save]);
+
+  // Manual retry when save failed
+  const retrySave = useCallback(() => {
+    void save({ title, content });
+  }, [save, title, content]);
 
   // Click outside for move dropdown
   useEffect(() => {
@@ -694,6 +702,16 @@ function NoteEditor({
             <span className="flex items-center gap-1 text-accent-emerald-700">
               <Check className="h-3 w-3" /> Salvo
             </span>
+          )}
+          {savingState === 'error' && (
+            <button
+              type="button"
+              onClick={retrySave}
+              className="inline-flex items-center gap-1 rounded-md bg-accent-rose-50 px-2 py-0.5 font-medium text-accent-rose-700 hover:bg-accent-rose-100"
+            >
+              <AlertCircle className="h-3 w-3" />
+              Falha ao salvar — tentar de novo
+            </button>
           )}
           {savingState === 'idle' && `Atualizado ${formatRelative(note.updated_at)}`}
         </span>

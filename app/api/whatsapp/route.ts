@@ -38,9 +38,12 @@ export async function POST(req: Request) {
   try {
     const res = await fetch(url, { method: 'GET' });
     detail = await res.text();
-    // CallMeBot returns 200 with HTML on success and on rate-limit. We treat
-    // HTTP 2xx as success unless the body explicitly says otherwise.
-    ok = res.ok && !/error|fail|invalid/i.test(detail);
+    // CallMeBot returns 200 even on rate-limit / queued / unauthorized, so
+    // whitelist explicit success keywords instead of blacklisting failure
+    // ones (more robust if they ever change error wording).
+    ok =
+      res.ok &&
+      /message\s+(queued|sent|will\s+be\s+sent)|messages\s+using\s+the\s+api/i.test(detail);
   } catch (err) {
     console.error('[whatsapp] fetch failed', err);
     ok = false;

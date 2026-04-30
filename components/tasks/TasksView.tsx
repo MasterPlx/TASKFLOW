@@ -50,8 +50,8 @@ export function TasksView({
   authorName: string;
   brandColor?: string;
   readOnly?: boolean;
-  onTaskCreated?: (t: Task) => Promise<void> | void;
-  onTaskCompleted?: (t: Task) => Promise<void> | void;
+  onTaskCreated?: (t: Task) => Promise<boolean | void> | boolean | void;
+  onTaskCompleted?: (t: Task) => Promise<boolean | void> | boolean | void;
 }) {
   const { toast } = useToast();
   const { confirm } = useConfirm();
