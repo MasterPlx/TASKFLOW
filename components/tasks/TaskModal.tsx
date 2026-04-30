@@ -1,7 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Loader2,
+  Bell,
+  Repeat,
+  Flag,
+  CircleDot,
+  Calendar,
+  Sparkles,
+} from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { createTask, updateTask } from '@/lib/supabase';
@@ -14,8 +22,37 @@ import {
   REMINDER_OPTIONS,
   STATUS_LABEL,
   STATUSES,
+  cn,
 } from '@/lib/utils';
-import { Bell } from 'lucide-react';
+
+const PRIORITY_DOTS: Record<Priority, string> = {
+  urgente: 'bg-accent-rose-600',
+  alta: 'bg-accent-peach-600',
+  média: 'bg-accent-amber-500',
+  baixa: 'bg-accent-emerald-600',
+};
+
+const STATUS_DOTS: Record<Status, string> = {
+  pendente: 'bg-ink-faint',
+  andamento: 'bg-accent-sky-500',
+  concluída: 'bg-accent-emerald-500',
+};
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function plusDaysISO(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function nextWeekday(weekday: number): string {
+  // weekday: 0=Sunday … 5=Friday
+  const d = new Date();
+  const diff = (weekday - d.getDay() + 7) % 7 || 7;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
 
 export function TaskModal({
   open,
@@ -64,6 +101,11 @@ export function TaskModal({
     }
   }, [open, task]);
 
+  // Disable reminder if there's no due_date
+  useEffect(() => {
+    if (!dueDate && reminderOffset !== null) setReminderOffset(null);
+  }, [dueDate, reminderOffset]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
@@ -79,16 +121,14 @@ export function TaskModal({
         client_id: clientId ?? null,
         created_by: createdBy,
         reminder_offset_minutes: reminderOffset,
-        // Reset reminder_sent_at when offset/due_date changes so it can re-fire
         reminder_sent_at:
           task &&
-          (task.reminder_offset_minutes !== reminderOffset || task.due_date !== (dueDate || null))
+          (task.reminder_offset_minutes !== reminderOffset ||
+            task.due_date !== (dueDate || null))
             ? null
             : undefined,
       };
-      const saved = task
-        ? await updateTask(task.id, payload)
-        : await createTask(payload);
+      const saved = task ? await updateTask(task.id, payload) : await createTask(payload);
       onSaved(saved);
       toast(editing ? 'Tarefa atualizada' : 'Tarefa criada', 'success');
       onClose();
@@ -100,6 +140,20 @@ export function TaskModal({
     }
   }
 
+  // Quick-date chips — labels include relative day names ("Hoje", "Amanhã", weekday)
+  const quickDates = useMemo(() => {
+    const today = todayISO();
+    const tomorrow = plusDaysISO(1);
+    const friday = nextWeekday(5);
+    const nextWeek = plusDaysISO(7);
+    return [
+      { label: 'Hoje', value: today },
+      { label: 'Amanhã', value: tomorrow },
+      { label: 'Sexta', value: friday },
+      { label: '+7 dias', value: nextWeek },
+    ];
+  }, []);
+
   return (
     <Modal
       open={open}
@@ -107,127 +161,238 @@ export function TaskModal({
       title={editing ? 'Editar tarefa' : 'Nova tarefa'}
       width="lg"
     >
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-5">
+        {/* Title — Notion-style block input (large, borderless) */}
         <div>
-          <label className="label" htmlFor="title">
-            Título *
-          </label>
           <input
             id="title"
-            className="input"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             autoFocus
             required
+            placeholder="Nome da tarefa..."
+            className={cn(
+              'w-full bg-transparent text-xl font-semibold tracking-tight',
+              'text-ink placeholder:text-ink-faint',
+              'focus:outline-none',
+            )}
           />
-        </div>
-        <div>
-          <label className="label" htmlFor="desc">
-            Descrição
-          </label>
           <textarea
             id="desc"
-            className="input min-h-[80px] resize-y"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            placeholder="Adicione uma descrição (opcional)..."
+            rows={2}
+            className={cn(
+              'mt-1 w-full resize-none bg-transparent text-sm leading-relaxed',
+              'text-ink-muted placeholder:text-ink-faint',
+              'focus:outline-none',
+            )}
           />
+          <div className="-mx-1 h-px bg-border" />
         </div>
+
+        {/* Type controls grid */}
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">Prioridade</label>
-            <select
-              className="input"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as Priority)}
-            >
+          <Field icon={<Flag className="h-3 w-3" />} label="Prioridade">
+            <div className="flex flex-wrap gap-1">
               {PRIORITIES.map((p) => (
-                <option key={p} value={p}>
+                <Pill
+                  key={p}
+                  active={priority === p}
+                  onClick={() => setPriority(p)}
+                  dot={PRIORITY_DOTS[p]}
+                >
                   {PRIORITY_LABEL[p]}
-                </option>
+                </Pill>
               ))}
-            </select>
-          </div>
-          <div>
-            <label className="label">Status</label>
-            <select
-              className="input"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as Status)}
-            >
+            </div>
+          </Field>
+          <Field icon={<CircleDot className="h-3 w-3" />} label="Status">
+            <div className="flex flex-wrap gap-1">
               {STATUSES.map((s) => (
-                <option key={s} value={s}>
+                <Pill
+                  key={s}
+                  active={status === s}
+                  onClick={() => setStatus(s)}
+                  dot={STATUS_DOTS[s]}
+                >
                   {STATUS_LABEL[s]}
-                </option>
+                </Pill>
               ))}
-            </select>
-          </div>
-          <div>
-            <label className="label">Prazo</label>
+            </div>
+          </Field>
+        </div>
+
+        {/* Date with quick chips */}
+        <Field icon={<Calendar className="h-3 w-3" />} label="Prazo">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               type="date"
-              className="input"
+              className="input max-w-[180px]"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
             />
-          </div>
-          <div>
-            <label className="label">Recorrência</label>
-            <select
-              className="input"
-              value={recurrence}
-              onChange={(e) => setRecurrence(e.target.value as Recurrence)}
-            >
-              {RECURRENCES.map((r) => (
-                <option key={r} value={r}>
-                  {RECURRENCE_LABEL[r]}
-                </option>
+            <div className="flex flex-wrap gap-1">
+              {quickDates.map((q) => (
+                <Pill
+                  key={q.label}
+                  active={dueDate === q.value}
+                  onClick={() => setDueDate(q.value)}
+                >
+                  {q.label}
+                </Pill>
               ))}
-            </select>
+              {dueDate && (
+                <button
+                  type="button"
+                  onClick={() => setDueDate('')}
+                  className="text-2xs text-ink-faint hover:text-ink-muted"
+                >
+                  limpar
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        </Field>
 
-        {/* Reminder section */}
-        <div className="rounded-lg border border-border bg-surface-sunken/50 p-3">
-          <label className="label flex items-center gap-1.5">
+        {/* Recurrence */}
+        <Field icon={<Repeat className="h-3 w-3" />} label="Recorrência">
+          <div className="flex flex-wrap gap-1">
+            {RECURRENCES.map((r) => (
+              <Pill
+                key={r}
+                active={recurrence === r}
+                onClick={() => setRecurrence(r)}
+              >
+                {RECURRENCE_LABEL[r]}
+              </Pill>
+            ))}
+          </div>
+        </Field>
+
+        {/* Reminder — only useful with a due_date, visually emphasized when active */}
+        <div
+          className={cn(
+            'rounded-lg border p-3 transition-colors',
+            !dueDate
+              ? 'border-dashed border-border-strong bg-surface-sunken/40'
+              : reminderOffset !== null
+                ? 'border-accent-amber-200 bg-accent-amber-50/60 dark:border-accent-amber-200/30 dark:bg-accent-amber-50/[.04]'
+                : 'border-border bg-surface-sunken/30',
+          )}
+        >
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-ink-muted">
             <Bell className="h-3 w-3" />
             Lembrete via WhatsApp
-          </label>
-          <select
-            className="input"
-            value={reminderOffset === null ? '' : String(reminderOffset)}
-            onChange={(e) =>
-              setReminderOffset(e.target.value === '' ? null : Number(e.target.value))
-            }
-            disabled={!dueDate}
-          >
+            {!dueDate && (
+              <span className="ml-auto text-2xs text-ink-faint">
+                Defina um prazo para habilitar
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1">
             {REMINDER_OPTIONS.map((opt) => (
-              <option key={opt.label} value={opt.value === null ? '' : String(opt.value)}>
+              <Pill
+                key={opt.label}
+                active={reminderOffset === opt.value}
+                onClick={() => setReminderOffset(opt.value)}
+                disabled={!dueDate}
+              >
                 {opt.label}
-              </option>
+              </Pill>
             ))}
-          </select>
-          {!dueDate && (
-            <p className="mt-1.5 text-2xs text-ink-faint">
-              Defina um prazo acima para habilitar lembretes
-            </p>
-          )}
+          </div>
           {dueDate && reminderOffset !== null && (
-            <p className="mt-1.5 text-2xs text-ink-subtle">
+            <p className="mt-2 text-2xs text-ink-subtle">
               {clientId
-                ? 'Será enviado para o WhatsApp do cliente'
-                : 'Será enviado para o seu WhatsApp (configurado em Configurações)'}
+                ? 'Você (admin) será avisado no WhatsApp configurado'
+                : 'Você (admin) será avisado no WhatsApp configurado'}
             </p>
           )}
         </div>
-        <div className="mt-2 flex justify-end gap-2">
-          <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={onClose}
+            disabled={saving}
+          >
             Cancelar
           </button>
-          <button type="submit" className="btn-primary" disabled={saving || !title.trim()}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? 'Salvar' : 'Criar'}
+          <button
+            type="submit"
+            className="btn-primary min-w-[120px]"
+            disabled={saving || !title.trim()}
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5" />
+                {editing ? 'Salvar' : 'Criar tarefa'}
+              </>
+            )}
           </button>
         </div>
       </form>
     </Modal>
+  );
+}
+
+// ── Reusable bits ───────────────────────────────────────────────────────────
+
+function Field({
+  icon,
+  label,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink-muted">
+        {icon}
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function Pill({
+  children,
+  active,
+  onClick,
+  disabled,
+  dot,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  /** When provided, a small colored dot prefixes the label */
+  dot?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-all',
+        active
+          ? 'border-brand-300 bg-brand-50 text-brand-700 shadow-elevated dark:border-brand-400/40 dark:bg-brand-400/10 dark:text-brand-200'
+          : 'border-border-strong bg-surface-raised text-ink-muted hover:border-ink-faint hover:bg-surface-sunken hover:text-ink',
+        disabled && 'cursor-not-allowed opacity-40 hover:bg-surface-raised hover:text-ink-muted',
+      )}
+    >
+      {dot && <span className={cn('dot', dot)} />}
+      {children}
+    </button>
   );
 }

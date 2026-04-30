@@ -124,35 +124,44 @@ export function ClientPortal({ client }: { client: Client }) {
 
   return (
     <div className="min-h-screen bg-surface">
-      {/* Hero with brand color background — gradient softens saturated colors */}
+      {/* Hero with brand color background — strong gradient softens saturated colors */}
       <header className="relative overflow-hidden">
-        {/* Solid base */}
+        {/* Solid base (the raw brand color) */}
         <div className="absolute inset-0" style={{ backgroundColor: accent }} aria-hidden />
-        {/* Diagonal darkening: top-left lighter, bottom-right darker. This adds
-            depth and tames very saturated colors (pure red, pure cyan, etc.). */}
+        {/* Strong vertical darkening: top brighter, bottom-right much darker.
+            This is the workhorse — turns flat saturated colors into a depth field. */}
         <div
           className="absolute inset-0"
           style={{
             backgroundImage:
-              `linear-gradient(135deg, ${hexToRgba('#FFFFFF', 0.10)} 0%, transparent 35%, ${hexToRgba('#000000', 0.35)} 100%)`,
+              `linear-gradient(155deg, ${hexToRgba('#FFFFFF', 0.18)} 0%, transparent 30%, ${hexToRgba('#000000', 0.55)} 100%)`,
           }}
           aria-hidden
         />
-        {/* Subtle radial highlight (soft glow top-left) */}
+        {/* Light bloom in top-left (gives a "lit from above" feel) */}
         <div
           className="absolute inset-0"
           style={{
             backgroundImage:
-              `radial-gradient(70% 90% at 0% 0%, ${hexToRgba('#FFFFFF', 0.12)} 0%, transparent 60%)`,
+              `radial-gradient(60% 80% at 10% -10%, ${hexToRgba('#FFFFFF', 0.20)} 0%, transparent 55%)`,
           }}
           aria-hidden
         />
-        {/* Tiny noise/texture using SVG to break up the flat color */}
+        {/* Vignette in bottom-right corner */}
         <div
-          className="absolute inset-0 opacity-[0.04]"
+          className="absolute inset-0"
           style={{
             backgroundImage:
-              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.6'/></svg>\")",
+              `radial-gradient(70% 100% at 100% 110%, ${hexToRgba('#000000', 0.40)} 0%, transparent 55%)`,
+          }}
+          aria-hidden
+        />
+        {/* Tiny SVG grain texture so cor sólida não pareça PVC */}
+        <div
+          className="absolute inset-0 opacity-[0.06] mix-blend-overlay"
+          style={{
+            backgroundImage:
+              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.7'/></svg>\")",
           }}
           aria-hidden
         />
