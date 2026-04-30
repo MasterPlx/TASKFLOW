@@ -83,8 +83,8 @@ export function TasksView({
             try {
               const [cs, as] = await Promise.all([listComments(t.id), listAttachments(t.id)]);
               counts[t.id] = { comments: cs.length, attachments: as.length };
-            } catch {
-              // Skip meta for this task — list still works
+            } catch (err) {
+              console.warn('[tasks] meta load failed for', t.id, err);
             }
           }),
         );
@@ -168,7 +168,6 @@ export function TasksView({
       const saved = await updateTask(task.id, { status: newStatus });
       applyTask(saved);
       if (newStatus === 'concluída' && prev !== 'concluída') {
-        // Confetti for important tasks (delight moment)
         if (saved.priority === 'urgente' || saved.priority === 'alta') {
           fireConfetti(28, 0.5, 0.45);
         }
@@ -177,11 +176,17 @@ export function TasksView({
           setTasks((prevList) => [created, ...prevList]);
           toast(`Tarefa recorrente reagendada para ${formatDate(nextDate)}`, 'info');
         }
-        await onTaskCompleted?.(saved);
+        const ok = await onTaskCompleted?.(saved);
+        if (ok === false) {
+          toast('Tarefa concluída — falha ao avisar cliente no WhatsApp', 'info');
+        }
       }
     } catch (err) {
       console.error(err);
-      applyTask({ ...task, status: prev });
+      // Revert ONLY status, keeping any concurrent changes from other tabs/users
+      setTasks((prevList) =>
+        prevList.map((t) => (t.id === task.id ? { ...t, status: prev } : t)),
+      );
       toast('Erro ao atualizar status', 'error');
     }
   }
@@ -375,7 +380,12 @@ export function TasksView({
         createdBy={createdBy}
         onSaved={async (t) => {
           applyTask(t);
-          if (!editing) await onTaskCreated?.(t);
+          if (!editing) {
+            const ok = await onTaskCreated?.(t);
+            if (ok === false) {
+              toast('Tarefa criada — falha ao notificar cliente no WhatsApp', 'info');
+            }
+          }
         }}
       />
 

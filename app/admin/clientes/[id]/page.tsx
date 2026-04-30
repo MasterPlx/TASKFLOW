@@ -21,6 +21,10 @@ export default function ClienteTasksPage() {
   useEffect(() => {
     if (!id) return;
     let mounted = true;
+    // Reset state when navigating between clients
+    setLoading(true);
+    setLoadError(null);
+    setClient(null);
     (async () => {
       try {
         const c = await getClientById(id);

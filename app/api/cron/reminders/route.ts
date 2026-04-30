@@ -148,18 +148,37 @@ async function handleRequest(req: Request): Promise<Response> {
     const attempts = task.reminder_attempts ?? 0;
 
     // No admin configured → log a SYSTEM error (client_id=null so it doesn't
-    // leak into the client's portal view) and DO NOT consume retry budget.
-    // Once the admin configures their WhatsApp, the next cron tick will send.
+    // leak into the client's portal view) AND consume retry budget so we
+    // don't spam the notifications table forever (would be 1440 rows/day if
+    // unbounded). Admin can fix their config then dismiss/retry manually.
     if (!adminRecipient) {
       const { error: insErr } = await supabase.from('notifications').insert({
-        client_id: null, // system-level error, not client-facing
+        client_id: null,
         task_id: task.id,
         message: `⚠️ Lembrete pendente: configure seu WhatsApp em /admin/configuracoes. Tarefa: ${task.title}`,
         channel: 'whatsapp',
         status: 'failed',
       });
       if (insErr) console.error('[cron] notification insert failed', insErr);
-      skipped++;
+
+      if (attempts + 1 >= MAX_ATTEMPTS) {
+        const { error: gErr } = await supabase
+          .from('tasks')
+          .update({
+            reminder_sent_at: new Date().toISOString(),
+            reminder_attempts: attempts + 1,
+          })
+          .eq('id', task.id);
+        if (gErr) console.error('[cron] no-admin given-up update failed', gErr);
+        givenUp++;
+      } else {
+        const { error: aErr } = await supabase
+          .from('tasks')
+          .update({ reminder_attempts: attempts + 1 })
+          .eq('id', task.id);
+        if (aErr) console.error('[cron] no-admin attempt-increment failed', aErr);
+        skipped++;
+      }
       continue;
     }
 

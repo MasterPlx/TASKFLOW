@@ -48,6 +48,7 @@ export function ClientPortal({ client }: { client: Client }) {
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true); // reset skeleton when client.id changes
     (async () => {
       try {
         const data = await listTasks({ clientId: client.id });
@@ -59,8 +60,8 @@ export function ClientPortal({ client }: { client: Client }) {
             try {
               const [cs, as] = await Promise.all([listComments(t.id), listAttachments(t.id)]);
               counts[t.id] = { comments: cs.length, attachments: as.length };
-            } catch {
-              // Skip meta — list still works
+            } catch (err) {
+              console.warn('[portal] meta load failed for', t.id, err);
             }
           }),
         );
@@ -121,7 +122,10 @@ export function ClientPortal({ client }: { client: Client }) {
       }
     } catch (err) {
       console.error(err);
-      applyTask({ ...task, status: prev });
+      // Revert only status — keep concurrent changes from server intact
+      setTasks((prevList) =>
+        prevList.map((t) => (t.id === task.id ? { ...t, status: prev } : t)),
+      );
       toast('Erro ao atualizar status', 'error');
     }
   }

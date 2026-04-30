@@ -126,7 +126,8 @@ export function NotesView() {
       const n = await createNote({ group_id: groupId, title: '' });
       setNotes((prev) => [n, ...prev]);
       setSelectedNoteId(n.id);
-    } catch {
+    } catch (err) {
+      console.error('[notes] create failed', err);
       toast('Erro ao criar nota', 'error');
     }
   }
@@ -152,7 +153,8 @@ export function NotesView() {
           setNotes((prev) => prev.filter((n) => n.id !== id));
           if (selectedNoteId === id) setSelectedNoteId(null);
           toast('Nota excluída', 'success');
-        } catch {
+        } catch (err) {
+          console.error('[notes] delete failed', err);
           toast('Erro ao excluir nota', 'error');
         }
       },
@@ -165,7 +167,8 @@ export function NotesView() {
     try {
       const saved = await updateNote(note.id, { pinned: next });
       applyNote(saved);
-    } catch {
+    } catch (err) {
+      console.error('[notes] toggle pin failed', err);
       applyNote(note); // revert
       toast('Erro ao atualizar', 'error');
     }
@@ -177,7 +180,8 @@ export function NotesView() {
       const saved = await updateNote(note.id, { group_id: targetGroupId });
       applyNote(saved);
       toast('Nota movida', 'success');
-    } catch {
+    } catch (err) {
+      console.error('[notes] move failed', err);
       applyNote(note);
       toast('Erro ao mover', 'error');
     }
@@ -216,7 +220,8 @@ export function NotesView() {
           setNotes((prev) => prev.filter((n) => n.group_id !== g.id));
           if (selectedGroup === g.id) setSelectedGroup(ALL_GROUP_ID);
           toast('Grupo excluído', 'success');
-        } catch {
+        } catch (err) {
+          console.error('[notes] delete group failed', err);
           toast('Erro ao excluir grupo', 'error');
         }
       },
