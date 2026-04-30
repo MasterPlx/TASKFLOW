@@ -309,6 +309,7 @@ export function ClientPortal({ client }: { client: Client }) {
         onClose={() => setModalOpen(false)}
         clientId={client.id}
         createdBy="client"
+        simplified
         onSaved={async (t) => {
           applyTask(t);
           await notifyTaskCreatedByClient(client, t);

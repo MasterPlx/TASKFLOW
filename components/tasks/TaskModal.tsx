@@ -61,6 +61,7 @@ export function TaskModal({
   task,
   clientId,
   createdBy,
+  simplified = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -68,6 +69,9 @@ export function TaskModal({
   task?: Task | null;
   clientId?: string | null;
   createdBy: 'admin' | 'client';
+  /** When true, hides priority/status/recurrence/reminder. Used by ClientPortal
+   *  so clients only describe the request — admin classifies it later. */
+  simplified?: boolean;
 }) {
   const editing = Boolean(task);
   const { toast } = useToast();
@@ -158,7 +162,7 @@ export function TaskModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={editing ? 'Editar tarefa' : 'Nova tarefa'}
+      title={editing ? 'Editar tarefa' : simplified ? 'Pedir nova tarefa' : 'Nova tarefa'}
       width="lg"
     >
       <form onSubmit={onSubmit} className="space-y-5">
@@ -170,7 +174,7 @@ export function TaskModal({
             onChange={(e) => setTitle(e.target.value)}
             autoFocus
             required
-            placeholder="Nome da tarefa..."
+            placeholder={simplified ? 'O que você precisa?' : 'Nome da tarefa...'}
             className={cn(
               'w-full bg-transparent text-xl font-semibold tracking-tight',
               'text-ink placeholder:text-ink-faint',
@@ -181,8 +185,12 @@ export function TaskModal({
             id="desc"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Adicione uma descrição (opcional)..."
-            rows={2}
+            placeholder={
+              simplified
+                ? 'Adicione mais detalhes (opcional). Ex: link de referência, observações, dimensões...'
+                : 'Adicione uma descrição (opcional)...'
+            }
+            rows={simplified ? 3 : 2}
             className={cn(
               'mt-1 w-full resize-none bg-transparent text-sm leading-relaxed',
               'text-ink-muted placeholder:text-ink-faint',
@@ -192,37 +200,39 @@ export function TaskModal({
           <div className="-mx-1 h-px bg-border" />
         </div>
 
-        {/* Type controls grid */}
-        <div className="grid grid-cols-2 gap-3">
-          <Field icon={<Flag className="h-3 w-3" />} label="Prioridade">
-            <div className="flex flex-wrap gap-1">
-              {PRIORITIES.map((p) => (
-                <Pill
-                  key={p}
-                  active={priority === p}
-                  onClick={() => setPriority(p)}
-                  dot={PRIORITY_DOTS[p]}
-                >
-                  {PRIORITY_LABEL[p]}
-                </Pill>
-              ))}
-            </div>
-          </Field>
-          <Field icon={<CircleDot className="h-3 w-3" />} label="Status">
-            <div className="flex flex-wrap gap-1">
-              {STATUSES.map((s) => (
-                <Pill
-                  key={s}
-                  active={status === s}
-                  onClick={() => setStatus(s)}
-                  dot={STATUS_DOTS[s]}
-                >
-                  {STATUS_LABEL[s]}
-                </Pill>
-              ))}
-            </div>
-          </Field>
-        </div>
+        {/* Type controls grid — admin only (clients don't classify, admin does) */}
+        {!simplified && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field icon={<Flag className="h-3 w-3" />} label="Prioridade">
+              <div className="flex flex-wrap gap-1">
+                {PRIORITIES.map((p) => (
+                  <Pill
+                    key={p}
+                    active={priority === p}
+                    onClick={() => setPriority(p)}
+                    dot={PRIORITY_DOTS[p]}
+                  >
+                    {PRIORITY_LABEL[p]}
+                  </Pill>
+                ))}
+              </div>
+            </Field>
+            <Field icon={<CircleDot className="h-3 w-3" />} label="Status">
+              <div className="flex flex-wrap gap-1">
+                {STATUSES.map((s) => (
+                  <Pill
+                    key={s}
+                    active={status === s}
+                    onClick={() => setStatus(s)}
+                    dot={STATUS_DOTS[s]}
+                  >
+                    {STATUS_LABEL[s]}
+                  </Pill>
+                ))}
+              </div>
+            </Field>
+          </div>
+        )}
 
         {/* Date with quick chips */}
         <Field icon={<Calendar className="h-3 w-3" />} label="Prazo">
@@ -256,61 +266,63 @@ export function TaskModal({
           </div>
         </Field>
 
-        {/* Recurrence */}
-        <Field icon={<Repeat className="h-3 w-3" />} label="Recorrência">
-          <div className="flex flex-wrap gap-1">
-            {RECURRENCES.map((r) => (
-              <Pill
-                key={r}
-                active={recurrence === r}
-                onClick={() => setRecurrence(r)}
-              >
-                {RECURRENCE_LABEL[r]}
-              </Pill>
-            ))}
-          </div>
-        </Field>
+        {/* Recurrence — admin only */}
+        {!simplified && (
+          <Field icon={<Repeat className="h-3 w-3" />} label="Recorrência">
+            <div className="flex flex-wrap gap-1">
+              {RECURRENCES.map((r) => (
+                <Pill
+                  key={r}
+                  active={recurrence === r}
+                  onClick={() => setRecurrence(r)}
+                >
+                  {RECURRENCE_LABEL[r]}
+                </Pill>
+              ))}
+            </div>
+          </Field>
+        )}
 
-        {/* Reminder — only useful with a due_date, visually emphasized when active */}
-        <div
-          className={cn(
-            'rounded-lg border p-3 transition-colors',
-            !dueDate
-              ? 'border-dashed border-border-strong bg-surface-sunken/40'
-              : reminderOffset !== null
-                ? 'border-accent-amber-200 bg-accent-amber-50/60 dark:border-accent-amber-200/30 dark:bg-accent-amber-50/[.04]'
-                : 'border-border bg-surface-sunken/30',
-          )}
-        >
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-ink-muted">
-            <Bell className="h-3 w-3" />
-            Lembrete via WhatsApp
-            {!dueDate && (
-              <span className="ml-auto text-2xs text-ink-faint">
-                Defina um prazo para habilitar
-              </span>
+        {/* Reminder — admin only (clients don't get reminders) */}
+        {!simplified && (
+          <div
+            className={cn(
+              'rounded-lg border p-3 transition-colors',
+              !dueDate
+                ? 'border-dashed border-border-strong bg-surface-sunken/40'
+                : reminderOffset !== null
+                  ? 'border-accent-amber-200 bg-accent-amber-50/60 dark:border-accent-amber-200/30 dark:bg-accent-amber-50/[.04]'
+                  : 'border-border bg-surface-sunken/30',
+            )}
+          >
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-ink-muted">
+              <Bell className="h-3 w-3" />
+              Lembrete via WhatsApp
+              {!dueDate && (
+                <span className="ml-auto text-2xs text-ink-faint">
+                  Defina um prazo para habilitar
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {REMINDER_OPTIONS.map((opt) => (
+                <Pill
+                  key={opt.label}
+                  active={reminderOffset === opt.value}
+                  onClick={() => setReminderOffset(opt.value)}
+                  disabled={!dueDate}
+                >
+                  {opt.label}
+                </Pill>
+              ))}
+            </div>
+            {dueDate && reminderOffset !== null && (
+              <p className="mt-2 text-2xs text-ink-subtle">
+                Você (admin) será avisado no WhatsApp configurado
+              </p>
             )}
           </div>
-          <div className="flex flex-wrap gap-1">
-            {REMINDER_OPTIONS.map((opt) => (
-              <Pill
-                key={opt.label}
-                active={reminderOffset === opt.value}
-                onClick={() => setReminderOffset(opt.value)}
-                disabled={!dueDate}
-              >
-                {opt.label}
-              </Pill>
-            ))}
-          </div>
-          {dueDate && reminderOffset !== null && (
-            <p className="mt-2 text-2xs text-ink-subtle">
-              {clientId
-                ? 'Você (admin) será avisado no WhatsApp configurado'
-                : 'Você (admin) será avisado no WhatsApp configurado'}
-            </p>
-          )}
-        </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 pt-1">
@@ -332,7 +344,7 @@ export function TaskModal({
             ) : (
               <>
                 <Sparkles className="h-3.5 w-3.5" />
-                {editing ? 'Salvar' : 'Criar tarefa'}
+                {editing ? 'Salvar' : simplified ? 'Enviar pedido' : 'Criar tarefa'}
               </>
             )}
           </button>

@@ -78,15 +78,37 @@ export async function notifyTaskCreatedByAdmin(client: Client, task: Task): Prom
   });
 }
 
+/**
+ * Client created a task in the portal → notify the ADMIN (not the client).
+ * Admin needs to know there's a new request to triage. Client just clicked
+ * "Enviar pedido" so they already know.
+ */
 export async function notifyTaskCreatedByClient(client: Client, task: Task): Promise<void> {
-  if (!client.phone || !client.callmebot_key) return;
   const settings = await loadSettings();
-  const template = settings?.task_created_template || FALLBACKS.task_created;
-  const message = render(template, { title: task.title });
+  if (!settings?.admin_phone || !settings.admin_callmebot_key) return;
+  const clientName = client.brand_name ?? client.name;
+  const lines = [
+    `📥 Novo pedido de ${clientName}`,
+    `Tarefa: ${task.title}`,
+  ];
+  if (task.description) {
+    // Truncate description so the WhatsApp message doesn't get huge
+    const desc = task.description.length > 160
+      ? task.description.slice(0, 160) + '...'
+      : task.description;
+    lines.push(`Detalhes: ${desc}`);
+  }
+  if (task.due_date) {
+    const d = new Date(`${task.due_date}T00:00:00`).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: 'short',
+    });
+    lines.push(`Prazo desejado: ${d}`);
+  }
   await sendViaApi({
-    phone: client.phone,
-    key: client.callmebot_key,
-    message: `Você criou: ${task.title}\n${message}`,
+    phone: settings.admin_phone,
+    key: settings.admin_callmebot_key,
+    message: lines.join('\n'),
     clientId: client.id,
     taskId: task.id,
   });
