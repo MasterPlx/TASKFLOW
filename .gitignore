@@ -10,3 +10,6 @@ out
 next-env.d.ts
 tsconfig.tsbuildinfo
 .remember
+
+# Local-only deploy scripts contain SSH credentials — must never be pushed
+scripts/_remote/
