@@ -126,3 +126,50 @@ export function initials(name: string): string {
 export function cn(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(' ');
 }
+
+/**
+ * Normalize a Brazilian phone for CallMeBot (full international format).
+ *
+ * Rules:
+ *   - Strip everything except digits
+ *   - If 10 or 11 digits (DDD + number, typical "I'll just type my WhatsApp"),
+ *     auto-prepend the Brazilian country code (55).
+ *   - Otherwise return as-is. CallMeBot validates server-side anyway.
+ *
+ * Returns:
+ *   - normalized: digits only, ready to send to the API
+ *   - hasAutoCountry: true if we added the 55 prefix (so we can hint in UI)
+ *   - valid: heuristic — at least 12 digits, max 15 (E.164 max)
+ */
+export function normalizePhone(input: string): {
+  normalized: string;
+  hasAutoCountry: boolean;
+  valid: boolean;
+} {
+  const digits = input.replace(/\D/g, '');
+  let normalized = digits;
+  let hasAutoCountry = false;
+  if (digits.length === 10 || digits.length === 11) {
+    normalized = '55' + digits;
+    hasAutoCountry = true;
+  }
+  const valid = normalized.length >= 12 && normalized.length <= 15;
+  return { normalized, hasAutoCountry, valid };
+}
+
+/** Format a digits-only phone for display: +55 (14) 99907-8928 */
+export function formatPhoneDisplay(digits: string): string {
+  if (!digits) return '';
+  if (digits.length < 12) return '+' + digits;
+  // 55 + 2 (DDD) + 8 or 9 digits
+  const country = digits.slice(0, 2);
+  const ddd = digits.slice(2, 4);
+  const rest = digits.slice(4);
+  if (rest.length === 9) {
+    return `+${country} (${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
+  }
+  if (rest.length === 8) {
+    return `+${country} (${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+  }
+  return `+${digits}`;
+}

@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Upload, X, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Upload, X, Image as ImageIcon, Check, AlertCircle } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { createClientRecord, getAppSettings, uploadClientLogo } from '@/lib/supabase';
 import type { Client } from '@/lib/types';
-import { initials } from '@/lib/utils';
+import { initials, normalizePhone, formatPhoneDisplay } from '@/lib/utils';
 
 export function ClientModal({
   open,
@@ -76,9 +76,13 @@ export function ClientModal({
     if (!name.trim()) return;
     setSaving(true);
     try {
+      // Normalize phone (auto-prepend 55 if Brazilian without country code)
+      const phoneClean = phone.trim()
+        ? normalizePhone(phone.trim()).normalized
+        : null;
       const c = await createClientRecord({
         name: name.trim(),
-        phone: phone.trim() || null,
+        phone: phoneClean,
         callmebot_key: callmebotKey.trim() || null,
         brand_name: brandName.trim() || null,
         brand_color: brandColor,
@@ -191,9 +195,31 @@ export function ClientModal({
               className="input"
               value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-              placeholder="5511999999999"
+              placeholder="14999998888 (DDD + número)"
               inputMode="numeric"
             />
+            {phone && (() => {
+              const p = normalizePhone(phone);
+              if (!p.normalized) return null;
+              return (
+                <div className="mt-1.5 flex items-start gap-1.5 text-2xs">
+                  {p.valid ? (
+                    <>
+                      <Check className="mt-0.5 h-3 w-3 flex-none text-accent-emerald-600" />
+                      <span className="text-accent-emerald-700">
+                        {formatPhoneDisplay(p.normalized)}
+                        {p.hasAutoCountry && ' (55 adicionado)'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="mt-0.5 h-3 w-3 flex-none text-accent-amber-600" />
+                      <span className="text-accent-amber-700">Adicione DDD + número</span>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <div>
             <label className="label" htmlFor="ckey">API Key CallMeBot</label>

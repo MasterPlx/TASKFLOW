@@ -9,12 +9,15 @@ import {
   Send,
   Phone,
   ExternalLink,
+  Check,
+  AlertCircle,
 } from 'lucide-react';
 import { getAppSettings, updateAppSettings } from '@/lib/supabase';
 import type { AppSettings } from '@/lib/types';
 import { useToast } from '@/components/Toast';
 import { Skeleton } from '@/components/Skeleton';
 import { invalidateSettingsCache } from '@/lib/notifications';
+import { formatPhoneDisplay, normalizePhone } from '@/lib/utils';
 
 export default function ConfiguracoesPage() {
   const { toast } = useToast();
@@ -43,13 +46,17 @@ export default function ConfiguracoesPage() {
     if (!settings) return;
     setSaving(true);
     try {
+      // Normalize phone before saving (auto-prepend 55 if Brazilian without country code)
+      const phoneNormalized = settings.admin_phone
+        ? normalizePhone(settings.admin_phone).normalized
+        : null;
       const saved = await updateAppSettings({
         brand_color: settings.brand_color,
         default_greeting: settings.default_greeting,
         reminder_template: settings.reminder_template,
         task_created_template: settings.task_created_template,
         task_completed_template: settings.task_completed_template,
-        admin_phone: settings.admin_phone,
+        admin_phone: phoneNormalized,
         admin_callmebot_key: settings.admin_callmebot_key,
         admin_name: settings.admin_name,
       });
@@ -69,13 +76,15 @@ export default function ConfiguracoesPage() {
       toast('Preencha telefone e API Key antes', 'error');
       return;
     }
+    // Use normalized phone (auto-prepend 55 if needed)
+    const phone = normalizePhone(settings.admin_phone).normalized;
     setTestingWa(true);
     try {
       const res = await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          phone: settings.admin_phone,
+          phone,
           key: settings.admin_callmebot_key,
           message: '🧪 Mensagem de teste do TaskFlow! Se você recebeu isso, está tudo configurado certo. ✅',
           clientId: null,
@@ -95,6 +104,11 @@ export default function ConfiguracoesPage() {
       setTestingWa(false);
     }
   }
+
+  // Live phone preview based on the typed value
+  const phonePreview = settings?.admin_phone
+    ? normalizePhone(settings.admin_phone)
+    : null;
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-8 md:px-10 md:py-10">
@@ -159,9 +173,32 @@ export default function ConfiguracoesPage() {
                       admin_phone: e.target.value.replace(/\D/g, ''),
                     })
                   }
-                  placeholder="5511999999999"
+                  placeholder="14999998888 (DDD + número)"
                   inputMode="numeric"
                 />
+                {phonePreview && phonePreview.normalized && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-2xs">
+                    {phonePreview.valid ? (
+                      <>
+                        <Check className="h-3 w-3 text-accent-emerald-600" />
+                        <span className="text-accent-emerald-700">
+                          Será enviado para{' '}
+                          <span className="font-semibold tabular">
+                            {formatPhoneDisplay(phonePreview.normalized)}
+                          </span>
+                          {phonePreview.hasAutoCountry && ' (código do Brasil 55 adicionado automaticamente)'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="h-3 w-3 text-accent-amber-600" />
+                        <span className="text-accent-amber-700">
+                          Número incompleto — adicione DDD + número (ex: 14999998888)
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             <div>
